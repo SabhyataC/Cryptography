@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Playfair Cipher | Tactical Visualizer</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=JetBrains+Mono:wght@300;500;700&display=swap" rel="stylesheet">
+
+    <style>
+        :root {
+            --neon-blue: #00d2ff;
+            --neon-purple: #9d50bb;
+            --neon-yellow: #fde047;
+            --cipher-pink: #f472b6;
+            --glass: rgba(6, 11, 25, 0.9);
+            --glass-border: rgba(0, 210, 255, 0.3);
+            --bg: #010206;
+        }
+
+        * { box-sizing: border-box; }
+        
+        body {
+            margin: 0;
+            font-family: 'JetBrains Mono', monospace;
+            background-color: var(--bg);
+            color: #f1f5f9;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        #steps-log::-webkit-scrollbar { width: 4px; }
+        #steps-log::-webkit-scrollbar-track { background: rgba(0, 0, 0, 0.2); border-radius: 10px; }
+        #steps-log::-webkit-scrollbar-thumb { background: var(--neon-blue); border-radius: 10px; box-shadow: 0 0 10px var(--neon-blue); }
+        #steps-log { scrollbar-width: thin; scrollbar-color: var(--neon-blue) rgba(0, 0, 0, 0.2); }
+
+        .glass-hud { background: rgba(255, 255, 255, 0.03); backdrop-filter: blur(25px); border: 1px solid rgba(0, 229, 255, 0.2); }
+
+        #sidebar { transition: transform 0.6s cubic-bezier(0.16, 1, 0.3, 1); z-index: 150; }
+        .sidebar-closed { transform: translateX(-100%); }
+        .sidebar-open { transform: translateX(0); }
+
+        #three-canvas { position: fixed; top: 0; left: 0; z-index: -1; }
+
+        header { padding: 90px 10px 10px; text-align: center; position: relative; z-index: 10; }
+        header h1 { font-family: 'Orbitron', sans-serif; letter-spacing: 12px; font-size: 2.5rem; margin: 0; text-shadow: 0 0 30px var(--neon-blue); font-weight: 900; }
+
+        .container { max-width: 1200px; margin: auto; padding: 20px; display: grid; grid-template-columns: 320px 1fr; gap: 25px; position: relative; z-index: 10; }
+
+        .panel { background: var(--glass); backdrop-filter: blur(15px); border: 1px solid var(--glass-border); border-radius: 15px; padding: 20px; margin-bottom: 20px; }
+
+        h2 { font-family: 'Orbitron', sans-serif; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 2px; color: var(--neon-blue); margin-bottom: 15px; border-bottom: 1px solid var(--glass-border); padding-bottom: 8px; }
+
+        input { width: 100%; padding: 12px; background: rgba(0, 0, 0, 0.6); border: 1px solid var(--glass-border); border-radius: 8px; color: var(--neon-blue); margin-bottom: 15px; font-family: 'Orbitron'; }
+
+        button.action-btn { width: 100%; padding: 15px; background: transparent; margin-top: 10px; color: var(--neon-blue); border: 1px solid var(--neon-blue); border-radius: 8px; font-family: 'Orbitron'; font-weight: bold; cursor: pointer; transition: 0.3s; text-transform: uppercase; }
+        button.action-btn:hover { background: var(--neon-blue); color: #000; box-shadow: 0 0 30px var(--neon-blue); }
+
+        .matrix-grid { display: grid; grid-template-columns: repeat(5, 55px); gap: 10px; }
+
+        .cell { width: 55px; height: 55px; display: flex; align-items: center; justify-content: center; background: rgba(0, 210, 255, 0.05); border: 1px solid var(--glass-border); border-radius: 10px; font-family: 'Orbitron'; font-weight: bold; opacity: 0; }
+        .cell.show { opacity: 1; }
+        .cell.plain-glow { background: rgba(0, 210, 255, 0.4); border-color: var(--neon-blue); box-shadow: 0 0 25px var(--neon-blue); }
+        .cell.cipher-glow { background: rgba(244, 114, 182, 0.4); border-color: var(--cipher-pink); box-shadow: 0 0 25px var(--cipher-pink); }
+
+        #steps-log { height: 315px; overflow-y: auto; background: rgba(0, 0, 0, 0.4); border: 1px solid var(--glass-border); border-radius: 12px; padding: 15px; flex-grow: 1; }
+
+        .log-entry { font-size: 0.85rem; padding: 12px; margin-bottom: 10px; background: rgba(255, 255, 255, 0.03); border-left: 4px solid transparent; display: flex; justify-content: space-between; cursor: pointer; }
+        .log-entry.active { background: rgba(0, 210, 255, 0.15); border-left-color: var(--neon-blue); }
+
+        /* MODE TOGGLE STYLE */
+        .mode-toggle { display: flex; gap: 5px; margin-bottom: 15px; }
+        .mode-btn { flex: 1; padding: 8px; font-size: 10px; font-family: 'Orbitron'; border: 1px solid var(--glass-border); color: #444; transition: 0.3s; cursor: pointer; }
+        .mode-btn.active { color: var(--neon-blue); border-color: var(--neon-blue); background: rgba(0, 210, 255, 0.1); }
+
+        @media (max-width: 850px) { .container { grid-template-columns: 1fr; } }
+    </style>
+</head>
+
+<body class="antialiased">
+    <canvas id="three-canvas"></canvas>
+
+    <aside id="sidebar" class="fixed top-0 left-0 h-full w-80 glass-hud border-r border-cyan-500/30 sidebar-closed p-0 overflow-y-auto">
+        <div class="p-8 flex justify-between items-center border-b border-white/10 bg-black/20">
+            <div>
+                <span class="font-header text-xs font-black text-cyan-400 tracking-[0.3em] uppercase block">Navigation</span>
+                <span class="text-[9px] text-gray-500 font-mono">ID: CIPHER_PRO_V2</span>
+            </div>
+            <button onclick="toggleSidebar()" class="w-10 h-10 flex items-center justify-center border border-white/10 rounded-full hover:bg-cyan-500 hover:text-black transition-all group">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+                </svg>
+            </button>
+        </div>
+        <div class="p-4 space-y-2">
+
+            <!-- Home -->
+            <a href="homepage.html" class="group flex flex-col gap-1 p-3 rounded-md border-l-4 border-transparent
+              hover:border-cyan-400 hover:bg-cyan-400/10
+              transition-all duration-300">
+
+                <div class="flex items-center gap-3">
+                    <!-- <span class="text-lg opacity-80 group-hover:opacity-100">🏠</span> -->
+                    <h4 class="font-header text-[11px] font-semibold tracking-widest uppercase
+                       text-gray-300 group-hover:text-cyan-400">
+                        Return Home
+                    </h4>
+                </div>
+            </a>
+
+            <a href="caeser.html" class="group flex flex-col gap-1 p-3 rounded-md border-l-4 border-transparent
+              hover:border-cyan-400 hover:bg-cyan-400/10
+              transition-all duration-300">
+
+                <div class="flex items-center gap-3">
+                    <!-- <span class="text-lg opacity-80 group-hover:opacity-100">🏠</span> -->
+                    <h4 class="font-header text-[11px] font-semibold tracking-widest uppercase
+                       text-gray-300 group-hover:text-cyan-400">
+                        Caeser Cipher
+                    </h4>
+                </div>
+            </a>
+            <a href="modified.html" class="group flex flex-col gap-1 p-3 rounded-md border-l-4 border-transparent
+              hover:border-cyan-400 hover:bg-cyan-400/10
+              transition-all duration-300">
+
+                <div class="flex items-center gap-3">
+                    <!-- <span class="text-lg opacity-80 group-hover:opacity-100">🏠</span> -->
+                    <h4 class="font-header text-[11px] font-semibold tracking-widest uppercase
+                       text-gray-300 group-hover:text-cyan-400">
+                        Modified Caeser Cipher
+                    </h4>
+                </div>
+            </a>
+
+            <a href="Vigenere.html" class="group flex flex-col gap-1 p-3 rounded-md border-l-4 border-transparent
+              hover:border-cyan-400 hover:bg-cyan-400/10
+              transition-all duration-300">
+
+                <div class="flex items-center gap-3">
+                    <!-- <span class="text-lg opacity-80 group-hover:opacity-100">🏠</span> -->
+                    <h4 class="font-header text-[11px] font-semibold tracking-widest uppercase
+                       text-gray-300 group-hover:text-cyan-400">
+                        Vigenere Cipher
+                    </h4>
+                </div>
+            </a>
+
+            <!-- Active: Vigenère -->
+            <div class="flex flex-col gap-1 p-3 rounded-md border-l-4 border-cyan-400
+                bg-cyan-500/10 shadow-[0_0_12px_rgba(34,211,238,0.15)]">
+
+                <div class="flex items-center gap-3">
+                    <!-- <span class="text-lg text-cyan-400">🎭</span> -->
+                    <h4 class="font-header text-[11px] font-bold tracking-widest uppercase text-cyan-400">
+                        Playfair Cipher
+                    </h4>
+                </div>
+            </div>
+
+            
+
+            <a href="vernam.html" class="group flex flex-col gap-1 p-3 rounded-md border-l-4 border-transparent
+              hover:border-cyan-400 hover:bg-cyan-400/10
+              transition-all duration-300">
+
+                <div class="flex items-center gap-3">
+                    <!-- <span class="text-lg opacity-80 group-hover:opacity-100">🏠</span> -->
+                    <h4 class="font-header text-[11px] font-semibold tracking-widest uppercase
+                       text-gray-300 group-hover:text-cyan-400">
+                        Vernam Cipher
+                    </h4>
+                </div>
+            </a>
+
+            <a href="hill.html" class="group flex flex-col gap-1 p-3 rounded-md border-l-4 border-transparent
+              hover:border-cyan-400 hover:bg-cyan-400/10
+              transition-all duration-300">
+
+                <div class="flex items-center gap-3">
+                    <!-- <span class="text-lg opacity-80 group-hover:opacity-100">🏠</span> -->
+                    <h4 class="font-header text-[11px] font-semibold tracking-widest uppercase
+                       text-gray-300 group-hover:text-cyan-400">
+                        Hill Cipher
+                    </h4>
+                </div>
+            </a>
+
+            <a href="railfence.html" class="group flex flex-col gap-1 p-3 rounded-md border-l-4 border-transparent
+              hover:border-cyan-400 hover:bg-cyan-400/10
+              transition-all duration-300">
+
+                <div class="flex items-center gap-3">
+                    <!-- <span class="text-lg opacity-80 group-hover:opacity-100">🏠</span> -->
+                    <h4 class="font-header text-[11px] font-semibold tracking-widest uppercase
+                       text-gray-300 group-hover:text-cyan-400">
+                        Railfence Cipher
+                    </h4>
+                </div>
+            </a>
+
+            <a href="aes.html" class="group flex flex-col gap-1 p-3 rounded-md border-l-4 border-transparent
+              hover:border-cyan-400 hover:bg-cyan-400/10
+              transition-all duration-300">
+
+                <div class="flex items-center gap-3">
+                    <!-- <span class="text-lg opacity-80 group-hover:opacity-100">🏠</span> -->
+                    <h4 class="font-header text-[11px] font-semibold tracking-widest uppercase
+                       text-gray-300 group-hover:text-cyan-400">
+                        AES
+                    </h4>
+                </div>
+            </a>
+            <a href="des.html" class="group flex flex-col gap-1 p-3 rounded-md border-l-4 border-transparent
+              hover:border-cyan-400 hover:bg-cyan-400/10
+              transition-all duration-300">
+
+                <div class="flex items-center gap-3">
+                    <!-- <span class="text-lg opacity-80 group-hover:opacity-100">🏠</span> -->
+                    <h4 class="font-header text-[11px] font-semibold tracking-widest uppercase
+                       text-gray-300 group-hover:text-cyan-400">
+                        DES
+                    </h4>
+                </div>
+            </a>
+
+        </div>
+    </aside>
+
+    <nav class="fixed top-0 w-full z-[100] border-b border-cyan-500/10 px-8 py-4 flex justify-between items-center glass-hud">
+    <div class="flex items-center space-x-4">
+        <button onclick="toggleSidebar()" class="p-2 hover:bg-cyan-500/10 rounded-full transition-colors group">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-cyan-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
+            </svg>
+        </button>
+        <span class="font-header text-xl tracking-tighter font-black uppercase" style="font-size: 20px; letter-spacing: 1px;">Crypto<span class="text-cyan-400">Evo</span></span>
+    </div>
+    <div class="hidden md:flex space-x-8 text-[10px] tracking-widest uppercase font-bold text-gray-400">
+        <span class="text-cyan-500 animate-pulse">STATUS: PLAYFAIR_ACTIVE</span>
+    </div>
+</nav>
+
+    <header>
+        <h1 id="scramble-target">PLAYFAIR CIPHER</h1>
+    </header>
+
+    <div class="container">
+        <div class="sidebar-controls">
+            <div class="panel">
+                <h2>System Inputs</h2>
+                
+                <label class="text-[10px] uppercase text-cyan-400 mb-2 block">Protocol Mode</label>
+                <div class="mode-toggle">
+                    <button id="mode-encrypt" class="mode-btn active" onclick="setMode('ENCRYPT')">ENCRYPT</button>
+                    <button id="mode-decrypt" class="mode-btn" onclick="setMode('DECRYPT')">DECRYPT</button>
+                </div>
+
+                <label class="text-[12px] uppercase text-cyan-400 mb-2 block">Message</label>
+                <input type="text" id="plain" value="INSTRUMENTS" style="padding: 5px;">
+                <label class="text-[12px] uppercase text-cyan-400 mb-2 block">Key</label>
+                <input type="text" id="key" value="MONARCHY" style="padding: 5px;">
+                <button class="action-btn" id="action-btn" onclick="runCipher()">Begin Protocol</button>
+            </div>
+
+            <div class="panel">
+                <h2>Logic Rules</h2>
+                <ul class="text-[11px] space-y-2 text-gray-400">
+                    <li>» Use 5x5 Grid (I/J shared)</li>
+                    <li>» Row: Shift Right (Enc) / Left (Dec)</li>
+                    <li>» Col: Shift Down (Enc) / Up (Dec)</li>
+                    <li>» Box: Swap horizontal corners</li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="main-visual">
+            <div class="panel">
+                <h2>Matrix Array & Live Stream</h2>
+                <div class="flex flex-col md:flex-row gap-8">
+                    <div id="grid" class="matrix-grid"></div>
+                    <div id="steps-log">
+                        <p class="text-center mt-20 text-gray-600 text-xs">AWAITING INPUT...</p>
+                    </div>
+                </div>
+            </div>
+
+            <div id="result-box" class="panel border-2 border-cyan-500/50 text-center" style="display:none;">
+                <span id="result-label" class="text-[10px] text-gray-500 block uppercase tracking-widest">Calculated Output</span>
+                <span id="result-text" class="block text-3xl text-cyan-400 font-black mt-2 tracking-widest" style="font-family: 'Orbitron';"></span>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let cipherMode = 'ENCRYPT';
+
+        function setMode(mode) {
+            cipherMode = mode;
+            document.getElementById('mode-encrypt').classList.toggle('active', mode === 'ENCRYPT');
+            document.getElementById('mode-decrypt').classList.toggle('active', mode === 'DECRYPT');
+            document.getElementById('action-btn').innerText = mode === 'ENCRYPT' ? 'Begin Protocol' : 'Reverse Protocol';
+            
+            // Visual flavor change
+            const color = mode === 'ENCRYPT' ? 'var(--neon-blue)' : 'var(--cipher-pink)';
+            document.getElementById('action-btn').style.borderColor = color;
+            document.getElementById('action-btn').style.color = mode === 'ENCRYPT' ? 'var(--neon-blue)' : 'white';
+        }
+
+        function toggleSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            sidebar.classList.toggle('sidebar-closed');
+            sidebar.classList.toggle('sidebar-open');
+        }
+
+        /* SCRAMBLE LOGIC */
+        class TextScramble {
+            constructor(el) { this.el = el; this.chars = '!<>-_\\/[]{}—=+*^?#________'; this.update = this.update.bind(this); }
+            setText(newText) {
+                const oldText = this.el.innerText; const length = Math.max(oldText.length, newText.length);
+                const promise = new Promise((resolve) => this.resolve = resolve);
+                this.queue = [];
+                for (let i = 0; i < length; i++) {
+                    const from = oldText[i] || ''; const to = newText[i] || '';
+                    const start = Math.floor(Math.random() * 40); const end = start + Math.floor(Math.random() * 40);
+                    this.queue.push({ from, to, start, end });
+                }
+                cancelAnimationFrame(this.frameRequest); this.frame = 0; this.update(); return promise;
+            }
+            update() {
+                let output = ''; let complete = 0;
+                for (let i = 0, n = this.queue.length; i < n; i++) {
+                    let { from, to, start, end, char } = this.queue[i];
+                    if (this.frame >= end) { complete++; output += to; }
+                    else if (this.frame >= start) {
+                        if (!char || Math.random() < 0.28) { char = this.chars[Math.floor(Math.random() * this.chars.length)]; this.queue[i].char = char; }
+                        output += `<span style="color:var(--neon-blue)">${char}</span>`;
+                    } else { output += from; }
+                }
+                this.el.innerHTML = output;
+                if (complete === this.queue.length) this.resolve(); else { this.frameRequest = requestAnimationFrame(this.update); this.frame++; }
+            }
+        }
+
+        /* 3D BACKGROUND */
+        let scene, camera, renderer, stars;
+        function initThree() {
+            scene = new THREE.Scene();
+            camera = new THREE.PerspectiveCamera(60, window.innerWidth/window.innerHeight, 1, 1000);
+            renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('three-canvas'), alpha: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            const geo = new THREE.BufferGeometry(); const pos = [];
+            for (let i = 0; i < 3500; i++) pos.push(Math.random()*1600-800, Math.random()*1600-800, Math.random()*1600-800);
+            geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+            stars = new THREE.Points(geo, new THREE.PointsMaterial({ color: 0x00d2ff, size: 1.2, transparent: true, opacity: 0.6 }));
+            scene.add(stars); camera.position.z = 1;
+        }
+        function animate() { requestAnimationFrame(animate); stars.rotation.z += 0.0004; stars.rotation.y += 0.0002; renderer.render(scene, camera); }
+        
+        window.onload = () => { 
+            initThree(); animate(); 
+            new TextScramble(document.getElementById('scramble-target')).setText('PLAYFAIR CIPHER');
+        };
+
+        /* PLAYFAIR ENGINE (ENCRYPT & DECRYPT) */
+        let currentMatrix = [];
+        const delay = (ms) => new Promise(res => setTimeout(res, ms));
+
+        async function highlightStep(plainIndices, cipherIndices, entryElement) {
+            document.querySelectorAll('.cell').forEach(c => c.classList.remove('plain-glow', 'cipher-glow'));
+            document.querySelectorAll('.log-entry').forEach(l => l.classList.remove('active'));
+            entryElement.classList.add('active');
+            plainIndices.forEach(idx => document.querySelectorAll('.cell')[idx].classList.add('plain-glow'));
+            cipherIndices.forEach(idx => document.querySelectorAll('.cell')[idx].classList.add('cipher-glow'));
+        }
+
+        async function runCipher() {
+            const rawKey = document.getElementById('key').value.toUpperCase().replace(/J/g, "I").replace(/[^A-Z]/g, "");
+            const rawInput = document.getElementById('plain').value.toUpperCase().replace(/J/g, "I").replace(/[^A-Z]/g, "");
+            if (!rawInput) return;
+
+            // Generate Matrix
+            const alpha = "ABCDEFGHIKLMNOPQRSTUVWXYZ";
+            const unique = [...new Set((rawKey + alpha).split(""))];
+            currentMatrix = [];
+            const tempUnique = [...unique];
+            while (tempUnique.length) currentMatrix.push(tempUnique.splice(0, 5));
+
+            // UI Matrix Render
+            const gridDiv = document.getElementById('grid');
+            gridDiv.innerHTML = "";
+            currentMatrix.flat().forEach((char, i) => {
+                const c = document.createElement('div');
+                c.className = 'cell';
+                c.innerText = char;
+                gridDiv.appendChild(c);
+                setTimeout(() => c.classList.add('show'), i * 15);
+            });
+
+            // Prepare Input Pairs
+            let pairs = [];
+            if (cipherMode === 'ENCRYPT') {
+                let prep = "";
+                for (let i = 0; i < rawInput.length; i++) {
+                    prep += rawInput[i];
+                    if (i < rawInput.length - 1) {
+                        if (rawInput[i] === rawInput[i + 1]) { prep += "X"; } 
+                        else { prep += rawInput[i + 1]; i++; }
+                    }
+                }
+                if (prep.length % 2 !== 0) prep += "X";
+                pairs = prep.match(/.{1,2}/g);
+            } else {
+                pairs = rawInput.match(/.{1,2}/g) || [];
+            }
+
+            const log = document.getElementById('steps-log');
+            log.innerHTML = "";
+            document.getElementById('result-box').style.display = "none";
+            
+            let finalResult = "";
+            const find = (char) => {
+                for (let r = 0; r < 5; r++)
+                    for (let c = 0; c < 5; c++)
+                        if (currentMatrix[r][c] === char) return { r, c, idx: (r * 5) + c };
+            };
+
+            // Logic Core
+            for (const p of pairs) {
+                if (p.length < 2) continue;
+                let a = find(p[0]), b = find(p[1]);
+                let rule, resA, resB;
+
+                if (a.r === b.r) {
+                    rule = "ROW";
+                    // Encrypt: +1, Decrypt: -1 (which is +4 in mod 5)
+                    const shift = (cipherMode === 'ENCRYPT') ? 1 : 4;
+                    resA = find(currentMatrix[a.r][(a.c + shift) % 5]);
+                    resB = find(currentMatrix[b.r][(b.c + shift) % 5]);
+                } else if (a.c === b.c) {
+                    rule = "COL";
+                    const shift = (cipherMode === 'ENCRYPT') ? 1 : 4;
+                    resA = find(currentMatrix[(a.r + shift) % 5][a.c]);
+                    resB = find(currentMatrix[(b.r + shift) % 5][b.c]);
+                } else {
+                    rule = "BOX";
+                    resA = find(currentMatrix[a.r][b.c]);
+                    resB = find(currentMatrix[b.r][a.c]);
+                }
+
+                const charA = currentMatrix[Math.floor(resA.idx / 5)][resA.idx % 5];
+                const charB = currentMatrix[Math.floor(resB.idx / 5)][resB.idx % 5];
+                finalResult += charA + charB;
+
+                const entry = document.createElement('div');
+                entry.className = "log-entry";
+                entry.innerHTML = `<span><b>${p}</b> &rarr; <b style="color:var(--cipher-pink)">${charA}${charB}</b></span> 
+                                   <span class="text-[10px] text-cyan-400 font-bold">${rule}</span>`;
+                
+                const pIdx = [a.idx, b.idx];
+                const cIdx = [resA.idx, resB.idx];
+                entry.onclick = () => highlightStep(pIdx, cIdx, entry);
+                log.appendChild(entry);
+                highlightStep(pIdx, cIdx, entry);
+                await delay(700);
+            }
+
+            // Display Result
+            document.getElementById('result-box').style.display = "block";
+            document.getElementById('result-text').innerText = finalResult;
+            document.getElementById('result-text').style.color = cipherMode === 'ENCRYPT' ? 'var(--neon-blue)' : 'var(--cipher-pink)';
+        }
+    </script>
+</body>
+</html>

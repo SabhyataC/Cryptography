@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CryptoEvo | Initializing Secure Protocols</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=JetBrains+Mono:wght@300;500&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --neon-cyan: #00E5FF;
+            --neon-purple: #9B5CFF;
+            --bg-ultra-dark: #010206;
+        }
+
+        body {
+            background-color: var(--bg-ultra-dark);
+            font-family: 'JetBrains Mono', monospace;
+            overflow: hidden;
+            height: 100vh;
+            width: 100vw;
+            margin: 0;
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .font-header { font-family: 'Orbitron', sans-serif; }
+
+        /* 3D Canvas Background */
+        #bg-canvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            z-index: 1;
+        }
+
+        /* Enhanced Glass HUD */
+        .glass-hud {
+            background: rgba(1, 2, 6, 0.6);
+            backdrop-filter: blur(30px) saturate(150%);
+            -webkit-backdrop-filter: blur(30px);
+            border: 1px solid rgba(0, 229, 255, 0.2);
+            box-shadow: 0 0 50px rgba(0, 0, 0, 0.8), 
+                        inset 0 0 20px rgba(0, 229, 255, 0.05);
+            position: relative;
+            z-index: 10;
+        }
+
+        /* Progress Bar Styling */
+        .progress-bar-container {
+            width: 100%;
+            height: 2px;
+            background: rgba(255, 255, 255, 0.05);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            width: 0%;
+            background: var(--neon-cyan);
+            box-shadow: 0 0 15px var(--neon-cyan);
+            transition: width 0.2s cubic-bezier(0.1, 0.5, 0.5, 1);
+        }
+
+        /* Glitch & Scanline Effects */
+        .scanline {
+            width: 100%;
+            height: 100px;
+            z-index: 15;
+            background: linear-gradient(0deg, rgba(0, 229, 255, 0) 0%, rgba(0, 229, 255, 0.05) 50%, rgba(0, 229, 255, 0) 100%);
+            opacity: 0.1;
+            position: absolute;
+            bottom: 100%;
+            animation: scan 4s linear infinite;
+        }
+
+        @keyframes scan {
+            0% { bottom: -100%; }
+            100% { bottom: 100%; }
+        }
+
+        .cyber-grid {
+            position: fixed;
+            inset: 0;
+            background-image: linear-gradient(rgba(0, 229, 255, 0.05) 1px, transparent 1px),
+                              linear-gradient(90deg, rgba(0, 229, 255, 0.05) 1px, transparent 1px);
+            background-size: 50px 50px;
+            z-index: 2;
+            mask-image: radial-gradient(circle, black, transparent 80%);
+        }
+
+        .fade-exit {
+            opacity: 0;
+            filter: blur(20px);
+            transition: all 1s ease;
+        }
+    </style>
+</head>
+<body>
+
+    <canvas id="bg-canvas"></canvas>
+    <div class="cyber-grid"></div>
+
+    <main id="loader-ui" class="w-full max-w-lg p-6">
+        <div class="glass-hud rounded-lg p-10 relative overflow-hidden">
+            <div class="scanline"></div>
+            
+            <div class="flex flex-col items-center mb-12">
+                <div class="w-16 h-16 border-2 border-cyan-500 mb-6 flex items-center justify-center animate-pulse">
+                    <span class="text-cyan-500 font-black text-2xl font-header">X</span>
+                </div>
+                <h1 class="font-header text-4xl font-black tracking-widest text-white mb-2">
+                    CRYPTO<span class="text-cyan-400">EVO</span>
+                </h1>
+                <p id="status-tag" class="text-[10px] text-cyan-500/60 uppercase tracking-[0.5em] font-bold">
+                    System Protocol Initialized
+                </p>
+            </div>
+
+            <div class="space-y-4">
+                <div class="flex justify-between font-mono text-[10px] text-gray-400 uppercase tracking-widest">
+                    <span id="load-status">Decrypting Core...</span>
+                    <span id="load-percent">0%</span>
+                </div>
+                
+                <div class="progress-bar-container">
+                    <div id="progress-fill" class="progress-fill"></div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-4 pt-4 border-t border-white/5">
+                    <div>
+                        <p class="text-[8px] text-gray-500 uppercase">Secure Uplink</p>
+                        <p class="text-[10px] text-green-400 font-bold">ESTABLISHED</p>
+                    </div>
+                    <div class="text-right">
+                        <p class="text-[8px] text-gray-500 uppercase">Memory Buffer</p>
+                        <p class="text-[10px] text-cyan-400 font-bold">0xAF4400-X</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        // --- 3D Background Logic ---
+        let scene, camera, renderer, globe;
+
+        function init3D() {
+            scene = new THREE.Scene();
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('bg-canvas'), alpha: true, antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+
+            // Create wireframe wire-globe
+            const geometry = new THREE.IcosahedronGeometry(2, 1);
+            const material = new THREE.MeshBasicMaterial({ 
+                color: 0x00E5FF, 
+                wireframe: true, 
+                transparent: true, 
+                opacity: 0.15 
+            });
+            globe = new THREE.Mesh(geometry, material);
+            scene.add(globe);
+
+            camera.position.z = 5;
+            animate3D();
+        }
+
+        function animate3D() {
+            requestAnimationFrame(animate3D);
+            globe.rotation.y += 0.005;
+            globe.rotation.x += 0.002;
+            renderer.render(scene, camera);
+        }
+
+        // --- Loading Logic ---
+        const statusMsgs = [
+            "Initializing secure handshake...",
+            "Loading symmetric logic modules...",
+            "Decrypting visual archives...",
+            "Verifying data integrity...",
+            "Establishing neural link..."
+        ];
+
+        let progress = 0;
+        const bar = document.getElementById('progress-fill');
+        const percent = document.getElementById('load-percent');
+        const statusText = document.getElementById('load-status');
+
+        function startLoading() {
+            const interval = setInterval(() => {
+                progress += Math.random() * 3;
+                
+                if (progress >= 100) {
+                    progress = 100;
+                    clearInterval(interval);
+                    finalize();
+                }
+
+                bar.style.width = `${progress}%`;
+                percent.innerText = `${Math.floor(progress)}%`;
+                
+                // Randomly change status text
+                if (Math.random() > 0.95) {
+                    statusText.innerText = statusMsgs[Math.floor(Math.random() * statusMsgs.length)];
+                }
+            }, 50);
+        }
+
+        function finalize() {
+            statusText.innerText = "ACCESS GRANTED";
+            statusText.style.color = "#2DFF8F";
+            setTimeout(() => {
+                document.getElementById('loader-ui').classList.add('fade-exit');
+                setTimeout(() => {
+                    window.location.href = 'homepage.html';
+                }, 1000);
+            }, 800);
+        }
+
+        window.onload = () => {
+            init3D();
+            startLoading();
+        };
+
+        window.onresize = () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        };
+    </script>
+</body>
+</html>

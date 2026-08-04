@@ -1,0 +1,500 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Modified Caesar | Tactical Visualizer</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=JetBrains+Mono:wght@300;500;700&display=swap" rel="stylesheet">
+
+    <style>
+        :root {
+            --neon-blue: #00e0ff;
+            --neon-purple: #9d50bb;
+            --glass: rgba(6, 11, 25, 0.9);
+            --glass-border: rgba(0, 224, 255, 0.3);
+            --bg: #05070a;
+        }
+
+        body {
+            margin: 0;
+            font-family: 'JetBrains Mono', monospace;
+            background-color: var(--bg);
+            color: #f1f5f9;
+            overflow-x: hidden;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+        }
+
+        #three-canvas { position: fixed; top: 0; left: 0; z-index: -1; }
+
+        .glass-hud {
+            background: rgba(255, 255, 255, 0.03);
+            backdrop-filter: blur(25px);
+            border: 1px solid rgba(0, 229, 255, 0.2);
+        }
+
+        #sidebar {
+            transition: transform 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+            z-index: 150;
+        }
+        .sidebar-closed { transform: translateX(-100%); }
+        .sidebar-open { transform: translateX(0); }
+
+        .card {
+            background: var(--glass);
+            backdrop-filter: blur(20px);
+            border: 1px solid var(--glass-border);
+            padding: 35px;
+            border-radius: 20px;
+            width: 90%;
+            max-width: 950px;
+            margin-top: 40px;
+            box-shadow: 0 30px 60px rgba(0, 0, 0, 0.5);
+            position: relative;
+            z-index: 10;
+        }
+
+        .io-group { display: flex; gap: 15px; margin-bottom: 30px; }
+
+        input {
+            background: rgba(0, 0, 0, 0.6);
+            border: 1px solid var(--glass-border);
+            padding: 15px;
+            border-radius: 10px;
+            color: #fff;
+            font-family: 'Orbitron';
+            text-align: center;
+            transition: all 0.3s;
+        }
+
+        input:focus {
+            outline: none;
+            border-color: var(--neon-blue);
+            box-shadow: 0 0 15px var(--neon-blue);
+        }
+
+        #modeToggle {
+            background: rgba(0, 224, 255, 0.1);
+            border: 1px solid var(--neon-blue);
+            color: var(--neon-blue);
+            padding: 0 20px;
+            border-radius: 10px;
+            font-family: 'Orbitron';
+            font-size: 0.7rem;
+            letter-spacing: 1px;
+            cursor: pointer;
+            transition: 0.3s;
+        }
+        #modeToggle:hover { background: var(--neon-blue); color: #000; }
+
+        #textInput { flex: 2; }
+        #keyInput { flex: 0.5; min-width: 80px; color: var(--neon-blue); font-weight: bold; }
+        #resultInput { flex: 2; color: var(--neon-blue); border-color: var(--neon-blue); }
+
+        .alpha-row { display: flex; gap: 6px; position: relative; }
+        #plainRow { border-left: 3px solid transparent; margin-bottom: 25px; }
+
+        .alpha-box {
+            min-width: 28px; height: 38px;
+            display: flex; justify-content: center; align-items: center;
+            background: rgba(10, 13, 26, 0.8);
+            border-radius: 6px;
+            font-weight: bold; font-size: 0.9rem;
+            border: 1px solid var(--glass-border);
+            color: #4b5a85;
+            transition: 0.3s;
+        }
+
+        .glow-p, .glow-c {
+            background: var(--neon-blue) !important;
+            color: #05070a !important;
+            box-shadow: 0 0 20px var(--neon-blue);
+            border-color: #fff !important;
+        }
+
+        .label {
+            font-family: 'Orbitron';
+            font-size: 0.7rem;
+            color: var(--neon-blue);
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            margin-bottom: 10px;
+            opacity: 0.8;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .label::after { content: ''; height: 1px; flex-grow: 1; background: linear-gradient(to right, var(--neon-blue), transparent); }
+
+        .track-window {
+            overflow: hidden;
+            width: 100%;
+            border-left: 3px solid var(--neon-blue);
+            background: rgba(0, 224, 255, 0.05);
+            padding: 10px 0;
+            mask-image: linear-gradient(to right, transparent, black 5%, black 95%, transparent);
+        }
+
+        .instruction-tag {
+            color: var(--neon-blue);
+            background: rgba(0, 224, 255, 0.05);
+            border-left: 4px solid var(--neon-blue);
+            padding: 12px 20px;
+            font-family: 'JetBrains Mono';
+            font-size: 0.8rem;
+            margin-bottom: 25px;
+            display: inline-block;
+            border-radius: 0 8px 8px 0;
+        }
+
+        #scramble-target {
+            font-family: 'Orbitron', sans-serif;
+            letter-spacing: 12px;
+            font-size: 2.5rem;
+            font-weight: 900;
+            text-transform: uppercase;
+            background: linear-gradient(to right, #fff, var(--neon-blue), #fff);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            filter: drop-shadow(0 0 15px rgba(0, 224, 255, 0.5));
+        }
+    </style>
+</head>
+
+<body>
+    <canvas id="three-canvas"></canvas>
+
+    <aside id="sidebar" class="fixed top-0 left-0 h-full w-80 glass-hud border-r border-cyan-500/30 sidebar-closed p-0 overflow-y-auto">
+        <div class="p-8 flex justify-between items-center border-b border-white/10 bg-black/20">
+            <div>
+                <span class="font-header text-xs font-black text-cyan-400 tracking-[0.3em] uppercase block">Navigation</span>
+                <span class="text-[9px] text-gray-500 font-mono">ID: CIPHER_PRO_V2</span>
+            </div>
+            <button onclick="toggleSidebar()" class="w-10 h-10 flex items-center justify-center border border-white/10 rounded-full hover:bg-cyan-500 hover:text-black transition-all group">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+                </svg>
+            </button>
+        </div>
+        <div class="p-4 space-y-2">
+
+            <!-- Home -->
+            <a href="homepage.html" class="group flex flex-col gap-1 p-3 rounded-md border-l-4 border-transparent
+              hover:border-cyan-400 hover:bg-cyan-400/10
+              transition-all duration-300">
+
+                <div class="flex items-center gap-3">
+                    <!-- <span class="text-lg opacity-80 group-hover:opacity-100">🏠</span> -->
+                    <h4 class="font-header text-[11px] font-semibold tracking-widest uppercase
+                       text-gray-300 group-hover:text-cyan-400">
+                        Return Home
+                    </h4>
+                </div>
+            </a>
+
+            <a href="caeser.html" class="group flex flex-col gap-1 p-3 rounded-md border-l-4 border-transparent
+              hover:border-cyan-400 hover:bg-cyan-400/10
+              transition-all duration-300">
+
+                <div class="flex items-center gap-3">
+                    <!-- <span class="text-lg opacity-80 group-hover:opacity-100">🏠</span> -->
+                    <h4 class="font-header text-[11px] font-semibold tracking-widest uppercase
+                       text-gray-300 group-hover:text-cyan-400">
+                        Caeser Cipher
+                    </h4>
+                </div>
+            </a>
+
+            <div class="flex flex-col gap-1 p-3 rounded-md border-l-4 border-cyan-400
+                bg-cyan-500/10 shadow-[0_0_12px_rgba(34,211,238,0.15)]">
+
+                <div class="flex items-center gap-3">
+                    <!-- <span class="text-lg text-cyan-400">🎭</span> -->
+                    <h4 class="font-header text-[11px] font-bold tracking-widest uppercase text-cyan-400">
+                        Modified Caeser Cipher
+                    </h4>
+                </div>
+            </div>
+
+            <a href="Vigenere.html" class="group flex flex-col gap-1 p-3 rounded-md border-l-4 border-transparent
+              hover:border-cyan-400 hover:bg-cyan-400/10
+              transition-all duration-300">
+
+                <div class="flex items-center gap-3">
+                    <!-- <span class="text-lg opacity-80 group-hover:opacity-100">🏠</span> -->
+                    <h4 class="font-header text-[11px] font-semibold tracking-widest uppercase
+                       text-gray-300 group-hover:text-cyan-400">
+                        Vigenere Cipher
+                    </h4>
+                </div>
+            </a>
+
+            <!-- Active: Vigenère -->
+            
+
+            <a href="Playfair2.html" class="group flex flex-col gap-1 p-3 rounded-md border-l-4 border-transparent
+              hover:border-cyan-400 hover:bg-cyan-400/10
+              transition-all duration-300">
+
+                <div class="flex items-center gap-3">
+                    <!-- <span class="text-lg opacity-80 group-hover:opacity-100">🏠</span> -->
+                    <h4 class="font-header text-[11px] font-semibold tracking-widest uppercase
+                       text-gray-300 group-hover:text-cyan-400">
+                        Playfair Cipher
+                    </h4>
+                </div>
+            </a>
+
+            <a href="vernam.html" class="group flex flex-col gap-1 p-3 rounded-md border-l-4 border-transparent
+              hover:border-cyan-400 hover:bg-cyan-400/10
+              transition-all duration-300">
+
+                <div class="flex items-center gap-3">
+                    <!-- <span class="text-lg opacity-80 group-hover:opacity-100">🏠</span> -->
+                    <h4 class="font-header text-[11px] font-semibold tracking-widest uppercase
+                       text-gray-300 group-hover:text-cyan-400">
+                        Vernam Cipher
+                    </h4>
+                </div>
+            </a>
+
+            <a href="hill.html" class="group flex flex-col gap-1 p-3 rounded-md border-l-4 border-transparent
+              hover:border-cyan-400 hover:bg-cyan-400/10
+              transition-all duration-300">
+
+                <div class="flex items-center gap-3">
+                    <!-- <span class="text-lg opacity-80 group-hover:opacity-100">🏠</span> -->
+                    <h4 class="font-header text-[11px] font-semibold tracking-widest uppercase
+                       text-gray-300 group-hover:text-cyan-400">
+                        Hill Cipher
+                    </h4>
+                </div>
+            </a>
+
+            <a href="railfence.html" class="group flex flex-col gap-1 p-3 rounded-md border-l-4 border-transparent
+              hover:border-cyan-400 hover:bg-cyan-400/10
+              transition-all duration-300">
+
+                <div class="flex items-center gap-3">
+                    <!-- <span class="text-lg opacity-80 group-hover:opacity-100">🏠</span> -->
+                    <h4 class="font-header text-[11px] font-semibold tracking-widest uppercase
+                       text-gray-300 group-hover:text-cyan-400">
+                        Railfence Cipher
+                    </h4>
+                </div>
+            </a>
+
+            <a href="aes.html" class="group flex flex-col gap-1 p-3 rounded-md border-l-4 border-transparent
+              hover:border-cyan-400 hover:bg-cyan-400/10
+              transition-all duration-300">
+
+                <div class="flex items-center gap-3">
+                    <!-- <span class="text-lg opacity-80 group-hover:opacity-100">🏠</span> -->
+                    <h4 class="font-header text-[11px] font-semibold tracking-widest uppercase
+                       text-gray-300 group-hover:text-cyan-400">
+                        AES
+                    </h4>
+                </div>
+            </a>
+            <a href="des.html" class="group flex flex-col gap-1 p-3 rounded-md border-l-4 border-transparent
+              hover:border-cyan-400 hover:bg-cyan-400/10
+              transition-all duration-300">
+
+                <div class="flex items-center gap-3">
+                    <!-- <span class="text-lg opacity-80 group-hover:opacity-100">🏠</span> -->
+                    <h4 class="font-header text-[11px] font-semibold tracking-widest uppercase
+                       text-gray-300 group-hover:text-cyan-400">
+                        DES
+                    </h4>
+                </div>
+            </a>
+
+        </div>
+    </aside>
+
+    <nav class="fixed top-0 w-full z-[100] border-b border-cyan-500/10 px-8 py-4 flex justify-between items-center glass-hud">
+        <div class="flex items-center space-x-4">
+            <button onclick="toggleSidebar()" class="p-2 hover:bg-cyan-500/10 rounded-full transition-colors group">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-cyan-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
+                </svg>
+            </button>
+            <span class="font-header text-xl tracking-tighter font-black uppercase" style="font-size: 20px; letter-spacing: 1px;">Crypto<span class="text-cyan-400">Evo</span></span>
+        </div>
+        <div class="hidden md:flex space-x-8 text-[10px] tracking-widest uppercase font-bold text-gray-400">
+            <span class="text-cyan-500 animate-pulse">STATUS: MODIFIED_CAESAR_ACTIVE</span>
+        </div>
+    </nav>
+
+    <div class="mt-32 text-center">
+        <h1 id="scramble-target">MODIFIED CAESAR</h1>
+        <p class="text-cyan-500/60 text-[10px] tracking-[8px] uppercase font-bold mt-2">Shift-Based Symmetric Encryption</p>
+    </div>
+
+    <div class="card">
+        <div class="io-group">
+            <button id="modeToggle">MODE: ENCRYPT</button>
+            <input id="textInput" placeholder="PLAINTEXT" maxlength="25" style="padding: 5px;">
+            <input id="keyInput" type="number" value="3" title="Shift Key">
+            <input id="resultInput" placeholder="ENCRYPTED" disabled>
+        </div>
+
+        <div class="label">Reference Alphabet</div>
+        <div id="plainRow" class="alpha-row"></div>
+
+        <div id="instruction" class="instruction-tag">[SYS] Terminal ready. Awaiting stream...</div>
+
+        <div class="label">Dynamic Shift Ribbon</div>
+        <div class="track-window">
+            <div id="cipherTrack" class="alpha-row"></div>
+        </div>
+    </div>
+
+    <script>
+        /* 3D BACKGROUND */
+        let scene, camera, renderer, stars;
+        function initThree() {
+            scene = new THREE.Scene();
+            camera = new THREE.PerspectiveCamera(60, window.innerWidth/window.innerHeight, 1, 1000);
+            renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('three-canvas'), alpha: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            const geo = new THREE.BufferGeometry(); const pos = [];
+            for (let i = 0; i < 3000; i++) pos.push(Math.random()*1600-800, Math.random()*1600-800, Math.random()*1600-800);
+            geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+            stars = new THREE.Points(geo, new THREE.PointsMaterial({ color: 0x00d2ff, size: 1.5, transparent: true, opacity: 0.6 }));
+            scene.add(stars); camera.position.z = 1;
+        }
+        function animate() { requestAnimationFrame(animate); stars.rotation.z += 0.0005; renderer.render(scene, camera); }
+
+        /* TEXT SCRAMBLE */
+        class TextScramble {
+            constructor(el) { this.el = el; this.chars = '!<>-_\\/[]{}—=+*^?#________'; this.update = this.update.bind(this); }
+            setText(newText) {
+                const oldText = this.el.innerText; const length = Math.max(oldText.length, newText.length);
+                const promise = new Promise((resolve) => this.resolve = resolve);
+                this.queue = [];
+                for (let i = 0; i < length; i++) {
+                    const from = oldText[i] || ''; const to = newText[i] || '';
+                    const start = Math.floor(Math.random() * 40); const end = start + Math.floor(Math.random() * 40);
+                    this.queue.push({ from, to, start, end });
+                }
+                cancelAnimationFrame(this.frameRequest); this.frame = 0; this.update(); return promise;
+            }
+            update() {
+                let output = ''; let complete = 0;
+                for (let i = 0, n = this.queue.length; i < n; i++) {
+                    let { from, to, start, end, char } = this.queue[i];
+                    if (this.frame >= end) { complete++; output += to; }
+                    else if (this.frame >= start) {
+                        if (!char || Math.random() < 0.28) { char = this.chars[Math.floor(Math.random() * this.chars.length)]; this.queue[i].char = char; }
+                        output += `<span class="text-cyan-400">${char}</span>`;
+                    } else { output += from; }
+                }
+                this.el.innerHTML = output;
+                if (complete === this.queue.length) this.resolve(); else { this.frameRequest = requestAnimationFrame(this.update); this.frame++; }
+            }
+        }
+
+        function toggleSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            sidebar.classList.toggle('sidebar-closed');
+            sidebar.classList.toggle('sidebar-open');
+        }
+
+        /* CAESAR LOGIC */
+        const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
+        const plainRow = document.getElementById("plainRow");
+        const cipherTrack = document.getElementById("cipherTrack");
+        const textInput = document.getElementById("textInput");
+        const keyInput = document.getElementById("keyInput");
+        const resultInput = document.getElementById("resultInput");
+        const instruction = document.getElementById("instruction");
+        const modeToggle = document.getElementById("modeToggle");
+
+        const boxWidth = 28;
+        const gap = 6;
+        const totalStep = boxWidth + gap;
+        let isEncryptMode = true;
+
+        function init() {
+            initThree(); animate();
+            new TextScramble(document.getElementById('scramble-target')).setText('MODIFIED CAESAR');
+
+            alphabet.forEach(char => {
+                const div = document.createElement("div");
+                div.className = "alpha-box";
+                div.textContent = char;
+                plainRow.appendChild(div);
+            });
+
+            [...alphabet, ...alphabet, ...alphabet].forEach(char => {
+                const div = document.createElement("div");
+                div.className = "alpha-box";
+                div.textContent = char;
+                cipherTrack.appendChild(div);
+            });
+
+            gsap.set("#cipherTrack", { x: -(totalStep * 26) });
+            updateVisuals();
+        }
+
+        function updateVisuals() {
+            let key = parseInt(keyInput.value) || 0;
+            // For decryption, we essentially use the negative of the key
+            let effectiveShift = isEncryptMode ? key : -key;
+            
+            const text = textInput.value.toUpperCase().replace(/[^A-Z]/g, "");
+
+            instruction.innerText = `[LOG] Mode: ${isEncryptMode ? 'Encrypt' : 'Decrypt'} | Key: ${key} | Stream: ${text.length > 0 ? text : 'Empty'}`;
+            resultInput.placeholder = isEncryptMode ? "ENCRYPTED" : "DECRYPTED";
+
+            // Ribbon shifts opposite to effectiveShift to align the correct letter underneath
+            gsap.to("#cipherTrack", {
+                x: -(totalStep * (26 + effectiveShift)),
+                duration: 0.6,
+                ease: "expo.out"
+            });
+
+            let res = "";
+            for (let char of text) {
+                const idx = alphabet.indexOf(char);
+                let newIdx = (idx + effectiveShift) % 26;
+                if (newIdx < 0) newIdx += 26;
+                res += alphabet[newIdx];
+            }
+            resultInput.value = res;
+
+            document.querySelectorAll(".alpha-box").forEach(b => b.classList.remove("glow-p", "glow-c"));
+            if (text.length > 0) {
+                const lastChar = text[text.length - 1];
+                const pIdx = alphabet.indexOf(lastChar);
+                if (plainRow.children[pIdx]) plainRow.children[pIdx].classList.add("glow-p");
+                
+                // Calculate position in the middle set of the triple-alphabet track
+                const cIdx = 26 + pIdx + effectiveShift;
+                if (cipherTrack.children[cIdx]) cipherTrack.children[cIdx].classList.add("glow-c");
+            }
+        }
+
+        modeToggle.addEventListener("click", () => {
+            isEncryptMode = !isEncryptMode;
+            modeToggle.innerText = isEncryptMode ? "MODE: ENCRYPT" : "MODE: DECRYPT";
+            updateVisuals();
+        });
+
+        textInput.addEventListener("input", (e) => {
+            textInput.value = e.target.value.toUpperCase().replace(/[^A-Z]/g, "");
+            updateVisuals();
+        });
+
+        keyInput.addEventListener("input", updateVisuals);
+        window.onload = init;
+    </script>
+</body>
+</html>

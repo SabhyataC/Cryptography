@@ -1,0 +1,967 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CryptoEvo | Journey of Transformation</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=JetBrains+Mono:wght@300;500;700&display=swap"
+        rel="stylesheet">
+    <style>
+        :root {
+            --neon-cyan: #00E5FF;
+            --neon-purple: #9B5CFF;
+            --neon-green: #2DFF8F;
+            --bg-ultra-dark: #010206;
+        }
+
+        body {
+            background-color: var(--bg-ultra-dark);
+            color: #ffffff;
+            font-family: 'JetBrains Mono', monospace;
+            overflow-x: hidden;
+            margin: 0;
+        }
+
+        .font-header {
+            font-family: 'Orbitron', sans-serif;
+        }
+
+        #three-canvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            z-index: -1;
+            pointer-events: none;
+        }
+
+        /* Glass HUD Styling */
+        .glass-hud {
+            background: rgba(255, 255, 255, 0.03);
+            backdrop-filter: blur(25px);
+            border: 1px solid rgba(0, 229, 255, 0.2);
+            box-shadow: 0 0 30px rgba(0, 0, 0, 0.5), inset 0 0 15px rgba(0, 229, 255, 0.05);
+        }
+
+        /* Sidebar Styling & Animations */
+        #sidebar {
+            transition: transform 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+            z-index: 150;
+        }
+
+        .sidebar-closed {
+            transform: translateX(-100%);
+        }
+
+        .sidebar-open {
+            transform: translateX(0);
+        }
+
+        .sidebar-item {
+            opacity: 0;
+            transform: translateX(-20px);
+            transition: all 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        .sidebar-open .sidebar-item {
+            opacity: 1;
+            transform: translateX(0);
+        }
+
+        .sidebar-item:nth-child(1) {
+            transition-delay: 0.2s;
+        }
+
+        .sidebar-item:nth-child(2) {
+            transition-delay: 0.3s;
+        }
+
+        .sidebar-item:nth-child(3) {
+            transition-delay: 0.4s;
+        }
+
+        .sidebar-link-hover {
+            position: relative;
+            overflow: hidden;
+        }
+
+        .sidebar-link-hover::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 0;
+            height: 100%;
+            width: 0;
+            background: linear-gradient(90deg, rgba(0, 229, 255, 0.2), transparent);
+            transition: width 0.3s ease;
+            z-index: -1;
+        }
+
+        .sidebar-link-hover:hover::before {
+            width: 100%;
+        }
+
+        /* High Priority Card Styling */
+        .priority-card {
+            background: linear-gradient(135deg, rgba(0, 229, 255, 0.05) 0%, rgba(0, 0, 0, 0.8) 100%);
+            border: 2px solid rgba(0, 229, 255, 0.1);
+            position: relative;
+            transition: all 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+            z-index: 10;
+        }
+
+        .priority-card:hover {
+            border-color: var(--neon-cyan);
+            box-shadow: 0 0 50px rgba(0, 229, 255, 0.3), inset 0 0 20px rgba(0, 229, 255, 0.1);
+            z-index: 50;
+        }
+
+        .scan-line {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 2px;
+            background: var(--neon-cyan);
+            box-shadow: 0 0 15px var(--neon-cyan);
+            opacity: 0;
+            z-index: 20;
+            pointer-events: none;
+        }
+
+        .priority-card:hover .scan-line {
+            animation: scanning 2s linear infinite;
+            opacity: 0.5;
+        }
+
+        @keyframes scanning {
+            0% {
+                top: 0%;
+            }
+
+            100% {
+                top: 100%;
+            }
+        }
+
+        .glitch-text {
+            position: relative;
+            display: inline-block;
+        }
+
+        .glitch-text::before,
+        .glitch-text::after {
+            content: attr(data-text);
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: var(--bg-ultra-dark);
+        }
+
+        .glitch-text::after {
+            left: 2px;
+            text-shadow: -2px 0 var(--neon-purple);
+            clip: rect(44px, 450px, 56px, 0);
+            animation: glitch-anim 5s infinite linear alternate-reverse;
+        }
+
+        @keyframes glitch-anim {
+            0% {
+                clip: rect(31px, 9999px, 94px, 0);
+            }
+
+            20% {
+                clip: rect(62px, 9999px, 42px, 0);
+            }
+
+            40% {
+                clip: rect(16px, 9999px, 78px, 0);
+            }
+
+            60% {
+                clip: rect(84px, 9999px, 12px, 0);
+            }
+
+            80% {
+                clip: rect(53px, 9999px, 66px, 0);
+            }
+
+            100% {
+                clip: rect(9px, 9999px, 85px, 0);
+            }
+        }
+
+        .hud-ring {
+            border: 2px dashed rgba(0, 229, 255, 0.3);
+            border-radius: 50%;
+            position: absolute;
+            animation: rotate-hud 20s linear infinite;
+        }
+
+        @keyframes rotate-hud {
+            from {
+                transform: rotate(0deg);
+            }
+
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        .reveal {
+            opacity: 0;
+            transform: perspective(1000px) rotateX(-10deg) translateY(50px);
+            transition: all 1s cubic-bezier(0.22, 1, 0.36, 1);
+        }
+
+        .reveal.active {
+            opacity: 1;
+            transform: perspective(1000px) rotateX(0deg) translateY(0);
+        }
+
+        .timeline-line {
+            background: linear-gradient(to bottom, transparent, var(--neon-cyan), var(--neon-purple), transparent);
+            width: 2px;
+            height: 100%;
+            position: absolute;
+            left: 50%;
+            transform: translateX(-50%);
+        }
+
+        .timeline-dot {
+            width: 12px;
+            height: 12px;
+            background: var(--neon-cyan);
+            border-radius: 50%;
+            position: absolute;
+            left: 50%;
+            transform: translateX(-50%);
+            box-shadow: 0 0 15px var(--neon-cyan);
+            z-index: 10;
+        }
+
+        .timeline-item {
+            opacity: 0;
+            transition: all 0.8s ease-out;
+        }
+
+        .timeline-item.active {
+            opacity: 1;
+        }
+
+        .cipher-node {
+            transition: all 0.5s cubic-bezier(0.23, 1, 0.32, 1);
+            transform-style: preserve-3d;
+        }
+
+        .neo-border-glow {
+            position: relative;
+        }
+
+        .neo-border-glow::after {
+            content: '';
+            position: absolute;
+            inset: -2px;
+            background: linear-gradient(45deg, var(--neon-cyan), transparent, var(--neon-purple), transparent, var(--neon-cyan));
+            background-size: 400% 400%;
+            z-index: -1;
+            opacity: 0.1;
+            border-radius: inherit;
+            transition: opacity 0.3s;
+            animation: border-wave 8s linear infinite;
+        }
+
+        @keyframes border-wave {
+            0% {
+                background-position: 0% 50%;
+            }
+
+            50% {
+                background-position: 100% 50%;
+            }
+
+            100% {
+                background-position: 0% 50%;
+            }
+        }
+
+        .cipher-node:hover.neo-border-glow::after {
+            opacity: 1;
+        }
+
+        #cryptography-visual-canvas {
+            width: 100%;
+            height: 400px;
+            cursor: move;
+        }
+    </style>
+</head>
+
+<body class="antialiased">
+
+    <canvas id="three-canvas"></canvas>
+
+    <!-- Sidebar Menu -->
+    <aside id="sidebar"
+        class="fixed top-0 left-0 h-full w-80 glass-hud border-r border-cyan-500/30 sidebar-closed p-0 overflow-y-auto">
+        <div class="p-8 flex justify-between items-center border-b border-white/10 bg-black/20">
+            <div>
+                <span
+                    class="font-header text-xs font-black text-cyan-400 tracking-[0.3em] uppercase block">Navigation</span>
+                <span class="text-[9px] text-gray-500 font-mono">ID: CIPHER_PRO_V2</span>
+            </div>
+            <button onclick="toggleSidebar()"
+                class="w-10 h-10 flex items-center justify-center border border-white/10 rounded-full hover:bg-cyan-500 hover:text-black transition-all group">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24"
+                    stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+                </svg>
+            </button>
+        </div>
+        <div class="p-4 space-y-2">
+
+            <!-- Home -->
+
+            <div class="flex flex-col gap-1 p-3 rounded-md border-l-4 border-cyan-400
+                bg-cyan-500/10 shadow-[0_0_12px_rgba(34,211,238,0.15)]">
+
+                <div class="flex items-center gap-3">
+                    <!-- <span class="text-lg text-cyan-400">🎭</span> -->
+                    <h4 class="font-header text-[11px] font-bold tracking-widest uppercase text-cyan-400">
+                        Home
+                    </h4>
+                </div>
+            </div>
+
+
+
+            <a href="caeser.html" class="group flex flex-col gap-1 p-3 rounded-md border-l-4 border-transparent
+              hover:border-cyan-400 hover:bg-cyan-400/10
+              transition-all duration-300">
+
+                <div class="flex items-center gap-3">
+                    <!-- <span class="text-lg opacity-80 group-hover:opacity-100">🏠</span> -->
+                    <h4 class="font-header text-[11px] font-semibold tracking-widest uppercase
+                       text-gray-300 group-hover:text-cyan-400">
+                        Caeser Cipher
+                    </h4>
+                </div>
+            </a>
+            <a href="modified.html" class="group flex flex-col gap-1 p-3 rounded-md border-l-4 border-transparent
+              hover:border-cyan-400 hover:bg-cyan-400/10
+              transition-all duration-300">
+
+                <div class="flex items-center gap-3">
+                    <!-- <span class="text-lg opacity-80 group-hover:opacity-100">🏠</span> -->
+                    <h4 class="font-header text-[11px] font-semibold tracking-widest uppercase
+                       text-gray-300 group-hover:text-cyan-400">
+                        Modified Caeser Cipher
+                    </h4>
+                </div>
+            </a>
+
+            <a href="Vigenere.html" class="group flex flex-col gap-1 p-3 rounded-md border-l-4 border-transparent
+              hover:border-cyan-400 hover:bg-cyan-400/10
+              transition-all duration-300">
+
+                <div class="flex items-center gap-3">
+                    <!-- <span class="text-lg opacity-80 group-hover:opacity-100">🏠</span> -->
+                    <h4 class="font-header text-[11px] font-semibold tracking-widest uppercase
+                       text-gray-300 group-hover:text-cyan-400">
+                        Vigenere Cipher
+                    </h4>
+                </div>
+            </a>
+
+            <!-- Active: Vigenère -->
+            <a href="railfence.html" class="group flex flex-col gap-1 p-3 rounded-md border-l-4 border-transparent
+              hover:border-cyan-400 hover:bg-cyan-400/10
+              transition-all duration-300">
+
+                <div class="flex items-center gap-3">
+                    <!-- <span class="text-lg opacity-80 group-hover:opacity-100">🏠</span> -->
+                    <h4 class="font-header text-[11px] font-semibold tracking-widest uppercase
+                       text-gray-300 group-hover:text-cyan-400">
+                        Railfence Cipher
+                    </h4>
+                </div>
+            </a>
+
+
+
+            <a href="vernam.html" class="group flex flex-col gap-1 p-3 rounded-md border-l-4 border-transparent
+              hover:border-cyan-400 hover:bg-cyan-400/10
+              transition-all duration-300">
+
+                <div class="flex items-center gap-3">
+                    <!-- <span class="text-lg opacity-80 group-hover:opacity-100">🏠</span> -->
+                    <h4 class="font-header text-[11px] font-semibold tracking-widest uppercase
+                       text-gray-300 group-hover:text-cyan-400">
+                        Vernam Cipher
+                    </h4>
+                </div>
+            </a>
+
+            <a href="hill.html" class="group flex flex-col gap-1 p-3 rounded-md border-l-4 border-transparent
+              hover:border-cyan-400 hover:bg-cyan-400/10
+              transition-all duration-300">
+
+                <div class="flex items-center gap-3">
+                    <!-- <span class="text-lg opacity-80 group-hover:opacity-100">🏠</span> -->
+                    <h4 class="font-header text-[11px] font-semibold tracking-widest uppercase
+                       text-gray-300 group-hover:text-cyan-400">
+                        Hill Cipher
+                    </h4>
+                </div>
+            </a>
+
+            <a href="railfence.html" class="group flex flex-col gap-1 p-3 rounded-md border-l-4 border-transparent
+              hover:border-cyan-400 hover:bg-cyan-400/10
+              transition-all duration-300">
+
+                <div class="flex items-center gap-3">
+                    <!-- <span class="text-lg opacity-80 group-hover:opacity-100">🏠</span> -->
+                    <h4 class="font-header text-[11px] font-semibold tracking-widest uppercase
+                       text-gray-300 group-hover:text-cyan-400">
+                        Railfence Cipher
+                    </h4>
+                </div>
+            </a>
+
+            <a href="aes.html" class="group flex flex-col gap-1 p-3 rounded-md border-l-4 border-transparent
+              hover:border-cyan-400 hover:bg-cyan-400/10
+              transition-all duration-300">
+
+                <div class="flex items-center gap-3">
+                    <!-- <span class="text-lg opacity-80 group-hover:opacity-100">🏠</span> -->
+                    <h4 class="font-header text-[11px] font-semibold tracking-widest uppercase
+                       text-gray-300 group-hover:text-cyan-400">
+                        AES
+                    </h4>
+                </div>
+            </a>
+            <a href="des.html" class="group flex flex-col gap-1 p-3 rounded-md border-l-4 border-transparent
+              hover:border-cyan-400 hover:bg-cyan-400/10
+              transition-all duration-300">
+
+                <div class="flex items-center gap-3">
+                    <!-- <span class="text-lg opacity-80 group-hover:opacity-100">🏠</span> -->
+                    <h4 class="font-header text-[11px] font-semibold tracking-widest uppercase
+                       text-gray-300 group-hover:text-cyan-400">
+                        DES
+                    </h4>
+                </div>
+            </a>
+
+        </div>
+    </aside>
+
+    <nav
+        class="fixed top-0 w-full z-[100] border-b border-cyan-500/10 px-8 py-4 flex justify-between items-center glass-hud">
+        <div class="flex items-center space-x-4">
+            <button onclick="toggleSidebar()" class="p-2 hover:bg-cyan-500/10 rounded-full transition-colors group">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-cyan-400" fill="none" viewBox="0 0 24 24"
+                    stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
+                </svg>
+            </button>
+            <span class="font-header text-xl tracking-tighter font-black uppercase"
+                style="font-size: 20px; letter-spacing: 1px;">Crypto<span class="text-cyan-400">Evo</span></span>
+        </div>
+        <div class="hidden md:flex items-center space-x-8 text-[10px] tracking-widest uppercase font-bold text-gray-400">
+    <a href="comparison.html" class="hover:text-cyan-400 transition-colors flex items-center group">
+        <span class="w-1 h-1 bg-cyan-500 rounded-full mr-2 opacity-0 group-hover:opacity-100 transition-opacity"></span>
+        Compare
+    </a>
+
+    <a href="evolution.html" class="hover:text-cyan-400 transition-colors flex items-center group">
+        <span class="w-1 h-1 bg-cyan-500 rounded-full mr-2 opacity-0 group-hover:opacity-100 transition-opacity"></span>
+        Evolution
+    </a>
+
+    <span class="text-cyan-500 animate-pulse border-l border-cyan-500/20 pl-8">Learn and Evolve</span>
+</div>
+    </nav>
+
+    <!-- Hero Section -->
+    <section id="home" class="relative h-screen flex items-center justify-center overflow-hidden">
+        <div class="hud-ring w-[600px] h-[600px] opacity-10"></div>
+        <div class="hud-ring w-[400px] h-[400px] opacity-20" style="animation-direction: reverse;"></div>
+
+        <div class="relative z-10 text-center space-y-8 px-6">
+            <div
+                class="inline-flex items-center space-x-2 px-4 py-1 border border-cyan-500/20 bg-cyan-500/5 rounded text-[10px] uppercase tracking-[0.3em] text-cyan-400">
+                <span class="w-2 h-2 bg-cyan-500 rounded-full animate-ping"></span>
+                <span>Plain to Cipher...</span>
+            </div>
+
+            <h1 class="font-header text-6xl md:text-9xl font-black uppercase tracking-tighter leading-none">
+                EVOLUTION OF<br>
+                <span class="glitch-text text-cyan-400" data-text="CRYPTOGRAPHY"
+                    id="scramble-target">CRYPTOGRAPHY</span>
+            </h1>
+
+            <p class="max-w-2xl mx-auto text-gray-500 text-sm md:text-lg font-light leading-relaxed">
+                Tracing cryptography from classical ciphers to modern encryption...
+            </p>
+
+            <!-- <div class="flex flex-col md:flex-row items-center justify-center gap-6 pt-8">
+                <button
+                    class="px-12 py-4 bg-cyan-500 text-black font-black uppercase tracking-widest hover:scale-110 transition-transform shadow-[0_0_40px_rgba(0,225,255,0.4)]">
+                    Access Data
+                </button>
+                <button
+                    class="px-12 py-4 border border-white/20 hover:border-cyan-500/50 hover:bg-cyan-500/5 transition-all uppercase tracking-widest font-bold text-xs">
+                    Network Map
+                </button>
+            </div> -->
+        </div>
+    </section>
+
+    <!-- Definition Section -->
+    <section id="what-is" class="py-32 relative">
+        <div class="max-w-7xl mx-auto px-8 grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
+            <div class="reveal">
+                <div
+                    class="inline-block px-3 py-1 bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 text-[10px] uppercase tracking-widest mb-6 font-bold">
+                    Foundation</div>
+                <h2 class="font-header text-5xl font-black uppercase mb-8 leading-tight">
+                    What is <span class="text-cyan-400">Encryption?</span>
+                </h2>
+                <div class="space-y-6 text-gray-400 leading-relaxed font-light">
+                    <p>Encryption is the process of encoding information so only authorized parties can access it. It
+                        transforms readable data (plaintext) into an unreadable format (ciphertext).</p>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div class="p-4 border border-white/5 bg-white/5 rounded">
+                            <div class="text-cyan-500 font-bold text-xs uppercase mb-1">Authenticity</div>
+                            <div class="text-[10px]">Verifying the identity of the data source.</div>
+                        </div>
+                        <div class="p-4 border border-white/5 bg-white/5 rounded">
+                            <div class="text-purple-500 font-bold text-xs uppercase mb-1">Non-Repudiation</div>
+                            <div class="text-[10px]">Ensuring a party cannot deny sending a message.</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="relative reveal group glass-hud rounded-2xl p-2">
+                <div id="cryptography-visual-canvas"></div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Centered Card Grid -->
+    <section id="ciphers" class="py-40 px-8 relative flex flex-col items-center justify-center">
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-12">
+            <div
+                class="cipher-node priority-card p-10 group relative overflow-hidden neo-border-glow rounded-xl flex flex-col">
+                <div class="scan-line"></div>
+                <div class="flex justify-between items-start mb-12 relative z-10">
+                    <div
+                        class="w-14 h-14 bg-cyan-500/20 flex items-center justify-center border border-cyan-500/40 group-hover:bg-cyan-500 transition-all duration-500">
+                        <span class="text-2xl group-hover:grayscale-0 grayscale transition">📜</span>
+                    </div>
+                    <span
+                        class="text-[9px] bg-cyan-500/20 text-cyan-400 px-3 py-1 rounded-full font-black">LEGACY-01</span>
+                </div>
+                <h3 class="font-header text-xl mb-4 group-hover:text-cyan-400 transition-colors uppercase font-black">
+                    Caesar Shift</h3>
+                <p class="text-[11px] text-gray-400 leading-relaxed mb-10">Ancient substitution technique that laid the
+                    groundwork for modern symmetric logic.</p>
+                <a href="caeser.html"
+                    class="mt-auto w-full py-3 bg-white/5 border border-white/10 hover:bg-cyan-500 hover:text-black transition-all text-[10px] font-black uppercase tracking-widest text-center">Execute</a>
+            </div>
+
+            <div
+                class="cipher-node priority-card p-10 group relative overflow-hidden neo-border-glow rounded-xl flex flex-col">
+                <div class="scan-line"></div>
+                <div class="flex justify-between items-start mb-12 relative z-10">
+                    <div
+                        class="w-14 h-14 bg-cyan-500/20 flex items-center justify-center border border-cyan-500/40 group-hover:bg-cyan-500 transition-all duration-500">
+                        <span class="text-2xl group-hover:grayscale-0 grayscale transition">⚙️</span>
+                    </div>
+                    <span
+                        class="text-[9px] bg-cyan-500/20 text-cyan-400 px-3 py-1 rounded-full font-black">LEGACY-02</span>
+                </div>
+                <h3 class="font-header text-xl mb-4 group-hover:text-cyan-400 transition-colors uppercase font-black">
+                    Modified Caesar</h3>
+                <p class="text-[11px] text-gray-400 leading-relaxed mb-10">Enhanced shift logic utilizing variable
+                    offsets or key-based starting positions.</p>
+                <a href="modified.html"
+                    class="mt-auto w-full py-3 bg-white/5 border border-white/10 hover:bg-cyan-500 hover:text-black transition-all text-[10px] font-black uppercase tracking-widest text-center">Execute</a>
+            </div>
+
+            <div
+                class="cipher-node priority-card p-10 group relative overflow-hidden neo-border-glow rounded-xl flex flex-col border-purple-500/40 lg:scale-105 shadow-2xl">
+                <div class="scan-line"></div>
+                <div class="flex justify-between items-start mb-12 relative z-10">
+                    <div
+                        class="w-14 h-14 bg-purple-500/20 flex items-center justify-center border border-purple-500/40 group-hover:bg-purple-500 transition-all duration-500">
+                        <span class="text-2xl group-hover:grayscale-0 grayscale transition">🎭</span>
+                    </div>
+                    <span
+                        class="text-[9px] bg-purple-500/20 text-purple-400 px-3 py-1 rounded-full font-black">MEDIAL-01</span>
+                </div>
+                <h3 class="font-header text-xl mb-4 group-hover:text-purple-400 transition-colors uppercase font-black">
+                    Vigenère Square</h3>
+                <p class="text-[11px] text-gray-400 leading-relaxed mb-10">The "Indecipherable Cipher" that introduced
+                    polyalphabetic complexity to the world.</p>
+                <a href="Vigenere.html"
+                    class="mt-auto w-full py-3 bg-white/5 border border-white/10 hover:bg-purple-500 hover:text-black transition-all text-[10px] font-black uppercase tracking-widest text-center">Execute</a>
+            </div>
+
+            <div
+                class="cipher-node priority-card p-10 group relative overflow-hidden neo-border-glow rounded-xl flex flex-col">
+                <div class="scan-line"></div>
+                <div class="flex justify-between items-start mb-12 relative z-10">
+                    <div
+                        class="w-14 h-14 bg-purple-500/20 flex items-center justify-center border border-purple-500/40 group-hover:bg-purple-500 transition-all duration-500">
+                        <span class="text-2xl group-hover:grayscale-0 grayscale transition">▦</span>
+                    </div>
+                    <span
+                        class="text-[9px] bg-purple-500/20 text-purple-400 px-3 py-1 rounded-full font-black">MEDIAL-02</span>
+                </div>
+                <h3 class="font-header text-xl mb-4 group-hover:text-purple-400 transition-colors uppercase font-black">
+                    Playfair Cipher</h3>
+                <p class="text-[11px] text-gray-400 leading-relaxed mb-10">Digraph substitution using a 5x5 matrix,
+                    encrypting pairs of letters for added security.</p>
+                <a href="Playfair2.html"
+                    class="mt-auto w-full py-3 bg-white/5 border border-white/10 hover:bg-purple-500 hover:text-black transition-all text-[10px] font-black uppercase tracking-widest text-center">Execute</a>
+            </div>
+
+            <div
+                class="cipher-node priority-card p-10 group relative overflow-hidden neo-border-glow rounded-xl flex flex-col">
+                <div class="scan-line"></div>
+                <div class="flex justify-between items-start mb-12 relative z-10">
+                    <div
+                        class="w-14 h-14 bg-purple-500/20 flex items-center justify-center border border-purple-500/40 group-hover:bg-purple-500 transition-all duration-500">
+                        <span class="text-2xl group-hover:grayscale-0 grayscale transition">📐</span>
+                    </div>
+                    <span
+                        class="text-[9px] bg-purple-500/20 text-purple-400 px-3 py-1 rounded-full font-black">MEDIAL-03</span>
+                </div>
+                <h3 class="font-header text-xl mb-4 group-hover:text-purple-400 transition-colors uppercase font-black">
+                    Hill Cipher</h3>
+                <p class="text-[11px] text-gray-400 leading-relaxed mb-10">A polygraphic substitution cipher based on
+                    linear algebra and matrix multiplication.</p>
+                <a href="hill.html"
+                    class="mt-auto w-full py-3 bg-white/5 border border-white/10 hover:bg-purple-500 hover:text-black transition-all text-[10px] font-black uppercase tracking-widest text-center">Execute</a>
+            </div>
+
+            <div
+                class="cipher-node priority-card p-10 group relative overflow-hidden neo-border-glow rounded-xl flex flex-col border-emerald-500/40">
+                <div class="scan-line"></div>
+                <div class="flex justify-between items-start mb-12 relative z-10">
+                    <div
+                        class="w-14 h-14 bg-emerald-500/20 flex items-center justify-center border border-emerald-500/40 group-hover:bg-emerald-500 transition-all duration-500">
+                        <span class="text-2xl group-hover:grayscale-0 grayscale transition">🔐</span>
+                    </div>
+                    <span
+                        class="text-[9px] bg-emerald-500/20 text-emerald-400 px-3 py-1 rounded-full font-black">ULTIMATE-01</span>
+                </div>
+                <h3
+                    class="font-header text-xl mb-4 group-hover:text-emerald-400 transition-colors uppercase font-black">
+                    Vernam (OTP)</h3>
+                <p class="text-[11px] text-gray-400 leading-relaxed mb-10">The One-Time Pad. Mathematically unbreakable
+                    encryption using a truly random key.</p>
+                <a href="vernam.html"
+                    class="mt-auto w-full py-3 bg-white/5 border border-white/10 hover:bg-emerald-500 hover:text-black transition-all text-[10px] font-black uppercase tracking-widest text-center">Execute</a>
+            </div>
+
+            <div
+                class="cipher-node priority-card p-10 group relative overflow-hidden neo-border-glow rounded-xl flex flex-col">
+                <div class="scan-line"></div>
+                <div class="flex justify-between items-start mb-12 relative z-10">
+                    <div
+                        class="w-14 h-14 bg-yellow-500/20 flex items-center justify-center border border-yellow-500/40 group-hover:bg-yellow-500 transition-all duration-500">
+                        <span class="text-2xl group-hover:grayscale-0 grayscale transition">🛤️</span>
+                    </div>
+                    <span
+                        class="text-[9px] bg-yellow-500/20 text-yellow-400 px-3 py-1 rounded-full font-black">TRANSPOSE</span>
+                </div>
+                <h3 class="font-header text-xl mb-4 group-hover:text-yellow-400 transition-colors uppercase font-black">
+                    Railfence</h3>
+                <p class="text-[11px] text-gray-400 leading-relaxed mb-10">A transposition cipher that writes text in a
+                    zigzag pattern across multiple "rails."</p>
+                <a href="railfence.html"
+                    class="mt-auto w-full py-3 bg-white/5 border border-white/10 hover:bg-yellow-500 hover:text-black transition-all text-[10px] font-black uppercase tracking-widest text-center">Execute</a>
+            </div>
+
+            <div
+                class="cipher-node priority-card p-10 group relative overflow-hidden neo-border-glow rounded-xl flex flex-col">
+                <div class="scan-line"></div>
+                <div class="flex justify-between items-start mb-12 relative z-10">
+                    <div
+                        class="w-14 h-14 bg-green-500/20 flex items-center justify-center border border-green-500/40 group-hover:bg-green-500 transition-all duration-500">
+                        <span class="text-2xl group-hover:grayscale-0 grayscale transition">📟</span>
+                    </div>
+                    <span
+                        class="text-[9px] bg-green-500/20 text-green-400 px-3 py-1 rounded-full font-black">OMEGA-01</span>
+                </div>
+                <h3 class="font-header text-xl mb-4 group-hover:text-green-400 transition-colors uppercase font-black">
+                    DES</h3>
+                <p class="text-[11px] text-gray-400 leading-relaxed mb-10">Data Encryption Standard. The 56-bit block
+                    cipher that defined 20th-century security.</p>
+                <a href="des.html"
+                    class="mt-auto w-full py-3 bg-white/5 border border-white/10 hover:bg-green-500 hover:text-black transition-all text-[10px] font-black uppercase tracking-widest text-center">Execute</a>
+            </div>
+
+            <div
+                class="cipher-node priority-card p-10 group relative overflow-hidden neo-border-glow rounded-xl flex flex-col">
+                <div class="scan-line"></div>
+                <div class="flex justify-between items-start mb-12 relative z-10">
+                    <div
+                        class="w-14 h-14 bg-green-500/20 flex items-center justify-center border border-green-500/40 group-hover:bg-green-500 transition-all duration-500">
+                        <span class="text-2xl group-hover:grayscale-0 grayscale transition">⚡</span>
+                    </div>
+                    <span
+                        class="text-[9px] bg-green-500/20 text-green-400 px-3 py-1 rounded-full font-black">OMEGA-02</span>
+                </div>
+                <h3 class="font-header text-xl mb-4 group-hover:text-green-400 transition-colors uppercase font-black">
+                    AES-256</h3>
+                <p class="text-[11px] text-gray-400 leading-relaxed mb-10">The modern gold standard. Protecting global
+                    communications with 256-bit Rijndael logic.</p>
+                <a href="aes.html"
+                    class="mt-auto w-full py-3 bg-white/5 border border-white/10 hover:bg-green-500 hover:text-black transition-all text-[10px] font-black uppercase tracking-widest text-center">Execute</a>
+            </div>
+        </div>
+    </section>
+
+    <!-- History Timeline -->
+    <!-- <section id="timeline" class="py-32 relative">
+        <div class="max-w-7xl mx-auto px-8">
+            <div class="mb-20 text-center reveal">
+                <h2 class="font-header text-4xl uppercase font-black text-white">The <span
+                        class="text-cyan-400">Chrono-Chain</span></h2>
+            </div>
+            <div class="relative">
+                <div class="timeline-line"></div>
+                <div class="space-y-32">
+                    <div class="timeline-item relative flex flex-col md:flex-row items-center">
+                        <div class="timeline-dot top-0"></div>
+                        <div class="w-full md:w-1/2 md:pr-16 text-right hidden md:block">
+                            <span class="font-header text-4xl text-cyan-500/20 font-black">100 BC</span>
+                        </div>
+                        <div class="w-full md:w-1/2 md:pl-16 reveal">
+                            <div class="glass-hud p-8 border-l-4 border-cyan-500">
+                                <h4 class="font-header text-lg text-white mb-2">Caesar Cipher</h4>
+                                <p class="text-sm text-gray-400">Military encryption in ancient Rome.</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="timeline-item relative flex flex-col md:flex-row-reverse items-center">
+                        <div class="timeline-dot top-0"></div>
+                        <div class="w-full md:w-1/2 md:pl-16 text-left hidden md:block">
+                            <span class="font-header text-4xl text-purple-500/20 font-black">1940 AD</span>
+                        </div>
+                        <div class="w-full md:w-1/2 md:pr-16 reveal">
+                            <div class="glass-hud p-8 border-r-4 border-purple-500 text-right">
+                                <h4 class="font-header text-lg text-white mb-2">Enigma Machine</h4>
+                                <p class="text-sm text-gray-400">The birth of modern computational breaking.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section> -->
+
+    <footer class="py-12 border-t border-white/5 bg-black/50 px-8 text-center">
+        <div class="text-[10px] text-gray-600 font-mono">STATUS: STABLE // ENCRYPTION_ACTIVE</div>
+    </footer>
+
+    <script>
+        let scene, camera, renderer, particles;
+        let coreScene, coreCamera, coreRenderer, coreMesh;
+        const mouse = new THREE.Vector2();
+        const targetMouse = new THREE.Vector2();
+
+        function toggleSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            sidebar.classList.toggle('sidebar-closed');
+            sidebar.classList.toggle('sidebar-open');
+        }
+
+        function initThree() {
+            scene = new THREE.Scene();
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 2000);
+            renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('three-canvas'), alpha: true, antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(window.devicePixelRatio);
+
+            const geometry = new THREE.BufferGeometry();
+            const positions = [];
+            const originalPositions = [];
+
+            for (let i = 0; i < 5000; i++) {
+                const x = THREE.MathUtils.randFloatSpread(2000);
+                const y = THREE.MathUtils.randFloatSpread(2000);
+                const z = THREE.MathUtils.randFloatSpread(2000);
+                positions.push(x, y, z);
+                originalPositions.push(x, y, z);
+            }
+
+            geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+            geometry.setAttribute('origin', new THREE.Float32BufferAttribute(originalPositions, 3));
+
+            const material = new THREE.PointsMaterial({
+                color: 0x00E5FF,
+                size: 2,
+                transparent: true,
+                opacity: 0.5,
+                blending: THREE.AdditiveBlending
+            });
+
+            particles = new THREE.Points(geometry, material);
+            scene.add(particles);
+            camera.position.z = 800;
+
+            const coreContainer = document.getElementById('cryptography-visual-canvas');
+            coreScene = new THREE.Scene();
+            coreCamera = new THREE.PerspectiveCamera(75, coreContainer.clientWidth / coreContainer.clientHeight, 0.1, 1000);
+            coreRenderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
+            coreRenderer.setSize(coreContainer.clientWidth, coreContainer.clientHeight);
+            coreContainer.appendChild(coreRenderer.domElement);
+
+            const coreGeom = new THREE.IcosahedronGeometry(2, 2);
+            const coreMat = new THREE.MeshBasicMaterial({ color: 0x00E5FF, wireframe: true, transparent: true, opacity: 0.4 });
+            coreMesh = new THREE.Mesh(coreGeom, coreMat);
+            coreScene.add(coreMesh);
+            coreCamera.position.z = 5;
+
+            window.addEventListener('mousemove', onMouseMove);
+            window.addEventListener('resize', onWindowResize);
+        }
+
+        function onMouseMove(event) {
+            targetMouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+            targetMouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            mouse.x += (targetMouse.x - mouse.x) * 0.05;
+            mouse.y += (targetMouse.y - mouse.y) * 0.05;
+
+            const posAttr = particles.geometry.attributes.position;
+            const originAttr = particles.geometry.attributes.origin;
+
+            for (let i = 0; i < posAttr.count; i++) {
+                let x = originAttr.getX(i);
+                let y = originAttr.getY(i);
+                let z = originAttr.getZ(i);
+
+                const mouseX = mouse.x * 1000;
+                const mouseY = mouse.y * 1000;
+
+                const dx = mouseX - x;
+                const dy = mouseY - y;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+
+                if (dist < 300) {
+                    const force = (300 - dist) / 300;
+                    x -= dx * force * 0.1;
+                    y -= dy * force * 0.1;
+                }
+                posAttr.setXYZ(i, x, y, z);
+            }
+            posAttr.needsUpdate = true;
+            particles.rotation.y += 0.001;
+            coreMesh.rotation.y += 0.01;
+            renderer.render(scene, camera);
+            coreRenderer.render(coreScene, coreCamera);
+        }
+
+        class TextScramble {
+            constructor(el) {
+                this.el = el;
+                this.chars = '!<>-_\\/[]{}—=+*^?#________';
+                this.update = this.update.bind(this);
+            }
+            setText(newText) {
+                const oldText = this.el.innerText;
+                const length = Math.max(oldText.length, newText.length);
+                const promise = new Promise((resolve) => this.resolve = resolve);
+                this.queue = [];
+                for (let i = 0; i < length; i++) {
+                    const from = oldText[i] || '';
+                    const to = newText[i] || '';
+                    const start = Math.floor(Math.random() * 40);
+                    const end = start + Math.floor(Math.random() * 40);
+                    this.queue.push({ from, to, start, end });
+                }
+                cancelAnimationFrame(this.frameRequest);
+                this.frame = 0;
+                this.update();
+                return promise;
+            }
+            update() {
+                let output = '';
+                let complete = 0;
+                for (let i = 0, n = this.queue.length; i < n; i++) {
+                    let { from, to, start, end, char } = this.queue[i];
+                    if (this.frame >= end) {
+                        complete++;
+                        output += to;
+                    } else if (this.frame >= start) {
+                        if (!char || Math.random() < 0.28) {
+                            char = this.chars[Math.floor(Math.random() * this.chars.length)];
+                            this.queue[i].char = char;
+                        }
+                        output += `<span class="text-cyan-500">${char}</span>`;
+                    } else {
+                        output += from;
+                    }
+                }
+                this.el.innerHTML = output;
+                if (complete === this.queue.length) {
+                    this.resolve();
+                } else {
+                    this.frameRequest = requestAnimationFrame(this.update);
+                    this.frame++;
+                }
+            }
+        }
+
+        function initMagneticCards() {
+            document.querySelectorAll('.cipher-node').forEach(node => {
+                node.addEventListener('mousemove', e => {
+                    const rect = node.getBoundingClientRect();
+                    const x = (e.clientX - rect.left) / rect.width - 0.5;
+                    const y = (e.clientY - rect.top) / rect.height - 0.5;
+                    node.style.transform = `perspective(2000px) rotateY(${x * 15}deg) rotateX(${y * -15}deg) scale(1.05)`;
+                });
+                node.addEventListener('mouseleave', () => {
+                    node.style.transform = `perspective(2000px) rotateY(0) rotateX(0) scale(1)`;
+                });
+            });
+        }
+
+        window.onload = () => {
+            initThree();
+            animate();
+            initMagneticCards();
+            const target = document.getElementById('scramble-target');
+            const fx = new TextScramble(target);
+            setTimeout(() => fx.setText('CRYPTOGRAPHY'), 1000);
+            const observer = new IntersectionObserver((entries) => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) entry.target.classList.add('active');
+                });
+            }, { threshold: 0.1 });
+            document.querySelectorAll('.reveal, .timeline-item').forEach(el => observer.observe(el));
+        };
+    </script>
+</body>
+
+</html>

@@ -1,0 +1,471 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AES-128 Visualizer - Pro Edition</title>
+
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=JetBrains+Mono:wght@300;500;700&display=swap" rel="stylesheet">
+
+<style>
+:root {
+    --neon-blue: #38bdf8;
+    --neon-purple: #ff9cff;
+    --neon-green: #7CFF7C;
+    --glass: rgba(15, 23, 42, 0.85);
+    --glass-border: rgba(56, 189, 248, 0.3);
+}
+
+*{box-sizing:border-box}
+
+body{
+    background:#020617; color:#e5e7eb;
+    font-family: 'JetBrains Mono', monospace;
+    text-align:center; margin:0; padding-bottom:60px;
+    overflow-x: hidden;
+}
+
+#three-canvas { position: fixed; top: 0; left: 0; z-index: -1; }
+
+/* --- Sidebar & Nav Styling from Vigenere --- */
+.glass-hud {
+    background: rgba(255, 255, 255, 0.03);
+    backdrop-filter: blur(25px);
+    border: 1px solid rgba(0, 229, 255, 0.2);
+}
+
+#sidebar {
+    transition: transform 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+    z-index: 150;
+}
+.sidebar-closed { transform: translateX(-100%); }
+.sidebar-open { transform: translateX(0); }
+
+.font-header {
+    font-family: 'Orbitron', sans-serif;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: 5px;
+    color: #fff;
+}
+
+h1.scramble-main {
+    font-family: 'Orbitron', sans-serif;
+    letter-spacing: 10px; font-size: 2.2rem;
+    text-shadow: 0 0 20px var(--neon-blue);
+    margin: 120px 20px 40px; /* Adjusted for fixed nav */
+}
+
+/* --- Original AES Components (Untouched) --- */
+.controls {
+    background: var(--glass);
+    backdrop-filter: blur(10px);
+    border: 1px solid var(--glass-border);
+    max-width: 600px; margin: 0 auto 30px;
+    padding: 25px; border-radius: 16px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+    position: relative; z-index: 1;
+}
+
+input {
+    padding: 12px 15px; margin: 8px; width: 240px;
+    border-radius: 8px; border: 1px solid var(--neon-blue);
+    background: rgba(255,255,255,0.05); color: #fff;
+    outline: none; transition: 0.3s;
+}
+input:focus { box-shadow: 0 0 15px var(--neon-blue); }
+
+button.original-btn {
+    padding: 12px 24px; border-radius: 8px; border: none;
+    margin: 10px 5px; cursor: pointer; font-weight: 700;
+    font-family: 'Orbitron'; text-transform: uppercase;
+    background: linear-gradient(135deg, var(--neon-blue), #0ea5e9);
+    color: #020617; transition: 0.3s;
+}
+button.original-btn:hover { transform: translateY(-3px); box-shadow: 0 0 20px var(--neon-blue); background: #fff; }
+
+#container{ max-width:900px; margin:auto; position: relative; z-index: 1; }
+
+.card {
+    background: var(--glass);
+    backdrop-filter: blur(12px);
+    border: 1px solid var(--glass-border);
+    border-radius: 14px;
+    padding: 20px; margin: 20px auto;
+    text-align: left; opacity: 0;
+    transform: translateX(-80px);
+    box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.4);
+}
+.card h3 { margin: 0 0 10px; color: var(--neon-blue); font-family: 'Orbitron'; font-size: 16px; }
+.card p { margin: 0 0 12px; font-size: 13px; color: #cbd5e1; }
+.code {
+    background: rgba(0,0,0,0.6); padding: 12px;
+    border-radius: 6px; font-size: 13px;
+    word-break: break-all; border-left: 3px solid var(--neon-blue);
+    font-family: 'JetBrains Mono';
+}
+
+.state { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.state div {
+    padding: 12px; border-radius: 6px;
+    text-align: center; font-family: 'JetBrains Mono';
+    background: #1e293b; border: 1px solid rgba(255,255,255,0.1);
+    font-weight: bold; position: relative; transition: 0.4s;
+}
+
+.subbytes div { border-bottom: 3px solid var(--neon-green); }
+.shiftrows div { border-bottom: 3px solid var(--neon-purple); }
+.addroundkey div { border-bottom: 3px solid var(--neon-blue); }
+.inverse div { border-bottom: 3px solid #f97316; }
+
+.changed {
+    background: #854d0e !important;
+    box-shadow: 0 0 20px #fde047;
+    color: #fff;
+}
+.controls input{
+    padding: 5px;
+}
+</style>
+</head>
+
+<body>
+<canvas id="three-canvas"></canvas>
+
+<aside id="sidebar" class="fixed top-0 left-0 h-full w-80 glass-hud border-r border-cyan-500/30 sidebar-closed p-0 overflow-y-auto">
+    <div class="p-8 flex justify-between items-center border-b border-white/10 bg-black/20 text-left">
+        <div>
+            <span class="font-header text-xs font-black text-cyan-400 tracking-[0.3em] uppercase block">Navigation</span>
+            <span class="text-[9px] text-gray-500 font-mono">ID: AES_CORE_V1</span>
+        </div>
+        <button onclick="toggleSidebar()" class="w-10 h-10 flex items-center justify-center border border-white/10 rounded-full hover:bg-cyan-500 hover:text-black transition-all group">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+            </svg>
+        </button>
+    </div>
+    <div class="p-4 space-y-2">
+
+            <!-- Home -->
+            <a href="homepage.html" class="group flex flex-col gap-1 p-3 rounded-md border-l-4 border-transparent
+              hover:border-cyan-400 hover:bg-cyan-400/10
+              transition-all duration-300">
+
+                <div class="flex items-center gap-3">
+                    <!-- <span class="text-lg opacity-80 group-hover:opacity-100">🏠</span> -->
+                    <h4 class="font-header text-[11px] font-semibold tracking-widest uppercase
+                       text-gray-300 group-hover:text-cyan-400">
+                        Return Home
+                    </h4>
+                </div>
+            </a>
+
+            <a href="caeser.html" class="group flex flex-col gap-1 p-3 rounded-md border-l-4 border-transparent
+              hover:border-cyan-400 hover:bg-cyan-400/10
+              transition-all duration-300">
+
+                <div class="flex items-center gap-3">
+                    <!-- <span class="text-lg opacity-80 group-hover:opacity-100">🏠</span> -->
+                    <h4 class="font-header text-[11px] font-semibold tracking-widest uppercase
+                       text-gray-300 group-hover:text-cyan-400">
+                        Caeser Cipher
+                    </h4>
+                </div>
+            </a>
+
+            <a href="modified.html" class="group flex flex-col gap-1 p-3 rounded-md border-l-4 border-transparent
+              hover:border-cyan-400 hover:bg-cyan-400/10
+              transition-all duration-300">
+
+                <div class="flex items-center gap-3">
+                    <!-- <span class="text-lg opacity-80 group-hover:opacity-100">🏠</span> -->
+                    <h4 class="font-header text-[11px] font-semibold tracking-widest uppercase
+                       text-gray-300 group-hover:text-cyan-400">
+                        Modified Ceaser Cipher
+                    </h4>
+                </div>
+            </a>
+
+            <!-- Active: Vigenère -->
+             <a href="Vigenere.html" class="group flex flex-col gap-1 p-3 rounded-md border-l-4 border-transparent
+              hover:border-cyan-400 hover:bg-cyan-400/10
+              transition-all duration-300">
+
+                <div class="flex items-center gap-3">
+                    <!-- <span class="text-lg opacity-80 group-hover:opacity-100">🏠</span> -->
+                    <h4 class="font-header text-[11px] font-semibold tracking-widest uppercase
+                       text-gray-300 group-hover:text-cyan-400">
+                        Vigenere Cipher
+                    </h4>
+                </div>
+            </a>
+            
+
+            <a href="Playfair2.html" class="group flex flex-col gap-1 p-3 rounded-md border-l-4 border-transparent
+              hover:border-cyan-400 hover:bg-cyan-400/10
+              transition-all duration-300">
+
+                <div class="flex items-center gap-3">
+                    <!-- <span class="text-lg opacity-80 group-hover:opacity-100">🏠</span> -->
+                    <h4 class="font-header text-[11px] font-semibold tracking-widest uppercase
+                       text-gray-300 group-hover:text-cyan-400">
+                        Playfair Cipher
+                    </h4>
+                </div>
+            </a>
+
+            <a href="vernam.html" class="group flex flex-col gap-1 p-3 rounded-md border-l-4 border-transparent
+              hover:border-cyan-400 hover:bg-cyan-400/10
+              transition-all duration-300">
+
+                <div class="flex items-center gap-3">
+                    <!-- <span class="text-lg opacity-80 group-hover:opacity-100">🏠</span> -->
+                    <h4 class="font-header text-[11px] font-semibold tracking-widest uppercase
+                       text-gray-300 group-hover:text-cyan-400">
+                        Vernam Cipher
+                    </h4>
+                </div>
+            </a>
+
+
+            <a href="hill.html" class="group flex flex-col gap-1 p-3 rounded-md border-l-4 border-transparent
+              hover:border-cyan-400 hover:bg-cyan-400/10
+              transition-all duration-300">
+
+                <div class="flex items-center gap-3">
+                    <!-- <span class="text-lg opacity-80 group-hover:opacity-100">🏠</span> -->
+                    <h4 class="font-header text-[11px] font-semibold tracking-widest uppercase
+                       text-gray-300 group-hover:text-cyan-400">
+                        Hill Cipher
+                    </h4>
+                </div>
+            </a>
+
+            <a href="vernam.html" class="group flex flex-col gap-1 p-3 rounded-md border-l-4 border-transparent
+              hover:border-cyan-400 hover:bg-cyan-400/10
+              transition-all duration-300">
+
+                <div class="flex items-center gap-3">
+                    <!-- <span class="text-lg opacity-80 group-hover:opacity-100">🏠</span> -->
+                    <h4 class="font-header text-[11px] font-semibold tracking-widest uppercase
+                       text-gray-300 group-hover:text-cyan-400">
+                        Vernam Cipher
+                    </h4>
+                </div>
+            </a>
+
+             <div class="flex flex-col gap-1 p-3 rounded-md border-l-4 border-cyan-400
+                bg-cyan-500/10 shadow-[0_0_12px_rgba(34,211,238,0.15)]">
+
+                <div class="flex items-center gap-3">
+                    <!-- <span class="text-lg text-cyan-400">🎭</span> -->
+                    <h4 class="font-header text-[11px] font-bold tracking-widest uppercase text-cyan-400">
+                        AES
+                    </h4>
+                </div>
+            </div>
+            
+            <a href="des.html" class="group flex flex-col gap-1 p-3 rounded-md border-l-4 border-transparent
+              hover:border-cyan-400 hover:bg-cyan-400/10
+              transition-all duration-300">
+
+                <div class="flex items-center gap-3">
+                    <!-- <span class="text-lg opacity-80 group-hover:opacity-100">🏠</span> -->
+                    <h4 class="font-header text-[11px] font-semibold tracking-widest uppercase
+                       text-gray-300 group-hover:text-cyan-400">
+                        DES
+                    </h4>
+                </div>
+            </a>
+
+        </div>
+</aside>
+
+<nav class="fixed top-0 w-full z-[100] border-b border-cyan-500/10 px-8 py-4 flex justify-between items-center glass-hud">
+    <div class="flex items-center space-x-4">
+        <button onclick="toggleSidebar()" class="p-2 hover:bg-cyan-500/10 rounded-full transition-colors group">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-cyan-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
+            </svg>
+        </button>
+        <span class="font-header text-xl tracking-tighter font-black uppercase">Crypto<span class="text-cyan-400">Evo</span></span>
+    </div>
+    <div class="hidden md:flex space-x-8 text-[10px] tracking-widest uppercase font-bold text-gray-400">
+        <span class="text-cyan-500 animate-pulse">STATUS: AES_VISUALIZER_ACTIVE</span>
+    </div>
+</nav>
+
+<h1 id="scramble-header" class="scramble-main">AES-128 Visualizer</h1>
+
+<div class="controls">
+    <input id="pt" placeholder="Plaintext (16 chars)" maxlength="16" spellcheck="false">
+    <input id="key" placeholder="Key (16 chars)" maxlength="16" spellcheck="false">
+    <br>
+    <button class="original-btn" onclick="encryptAES()">Initialize Encryption</button>
+    <button class="original-btn" onclick="decryptAES()">Start Decryption</button>
+</div>
+
+<div id="container"></div>
+
+<script>
+/* Sidebar Toggle Logic */
+function toggleSidebar() {
+    const sidebar = document.getElementById('sidebar');
+    sidebar.classList.toggle('sidebar-closed');
+    sidebar.classList.toggle('sidebar-open');
+}
+
+/* TEXT SCRAMBLE EFFECT */
+class TextScramble {
+    constructor(el) {
+        this.el = el;
+        this.chars = '!<>-_\\/[]{}—=+*^?#________';
+        this.update = this.update.bind(this);
+    }
+    setText(newText) {
+        const oldText = this.el.innerText;
+        const length = Math.max(oldText.length, newText.length);
+        this.queue = [];
+        for (let i = 0; i < length; i++) {
+            const from = oldText[i] || '';
+            const to = newText[i] || '';
+            const start = Math.floor(Math.random() * 40);
+            const end = start + Math.floor(Math.random() * 40);
+            this.queue.push({ from, to, start, end });
+        }
+        cancelAnimationFrame(this.frameRequest);
+        this.frame = 0;
+        this.update();
+    }
+    update() {
+        let output = '';
+        let complete = 0;
+        for (let i = 0, n = this.queue.length; i < n; i++) {
+            let { from, to, start, end, char } = this.queue[i];
+            if (this.frame >= end) { complete++; output += to; }
+            else if (this.frame >= start) {
+                if (!char || Math.random() < 0.28) {
+                    char = this.chars[Math.floor(Math.random() * this.chars.length)];
+                    this.queue[i].char = char;
+                }
+                output += `<span style="color:var(--neon-blue)">${char}</span>`;
+            } else { output += from; }
+        }
+        this.el.innerHTML = output;
+        if (complete !== this.queue.length) { this.frameRequest = requestAnimationFrame(this.update); this.frame++; }
+    }
+}
+
+/* 3D BACKGROUND */
+let scene, camera, renderer, stars;
+function initThree() {
+    scene = new THREE.Scene();
+    camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
+    renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('three-canvas'), alpha: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    const geometry = new THREE.BufferGeometry(); const pos = [];
+    for (let i = 0; i < 3000; i++) pos.push(Math.random()*2000-1000, Math.random()*2000-1000, Math.random()*2000-1000);
+    geometry.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    stars = new THREE.Points(geometry, new THREE.PointsMaterial({ color: 0x38bdf8, size: 2, transparent: true, opacity: 0.4 }));
+    scene.add(stars); camera.position.z = 500;
+}
+function animate() { requestAnimationFrame(animate); stars.rotation.y += 0.0004; renderer.render(scene, camera); }
+
+/* ORIGINAL AES LOGIC */
+const container=document.getElementById("container");
+let timeline=gsap.timeline({defaults:{ease:"power2.out"}});
+
+const textToBytes=t=>[...t].map(c=>c.charCodeAt(0));
+const bytesToHex=b=>b.map(x=>x.toString(16).padStart(2,"0")).join(" ");
+
+function addCard(html){
+    const d=document.createElement("div");
+    d.className="card";
+    d.innerHTML=html;
+    container.appendChild(d);
+    timeline.to(d,{opacity:1,x:0,duration:.6});
+    return d;
+}
+
+function stateCard(title,prev,next,text,cls="",move=false){
+    const d=addCard(`
+        <h3>${title}</h3>
+        <p>${text}</p>
+        <div class="state ${cls}">
+            ${next.map(b=>`<div>${b.toString(16).padStart(2,"0")}</div>`).join("")}
+        </div>
+    `);
+    const cells=[...d.querySelectorAll(".state div")];
+    if(prev){
+        next.forEach((b,i)=>{
+            if(prev[i]!==b){
+                const c=cells[i];
+                c.classList.add("changed");
+                timeline.fromTo(c, {scale:0.6,opacity:0}, {scale:1.2,opacity:1,duration:.35})
+                        .to(c,{scale:1, boxShadow:"0 0 20px #fde047", duration:.25})
+                        .to(c,{boxShadow:"0 0 0px transparent", duration:.3});
+            }
+        });
+    }
+    if(move){
+        cells.forEach((c,i)=>{
+            timeline.fromTo(c, {x:(i%4)*-18,y:Math.floor(i/4)*-14}, {x:0,y:0,duration:.6,ease:"back.out(1.7)"}, "<");
+        });
+    }
+}
+
+function aesRound(state,key,r){
+    stateCard(`Round ${r} – SubBytes`,state,state,"Byte substitution based on S-Box","subbytes");
+    const shifted=[
+        state[0],state[5],state[10],state[15],
+        state[4],state[9],state[14],state[3],
+        state[8],state[13],state[2],state[7],
+        state[12],state[1],state[6],state[11]
+    ];
+    stateCard(`Round ${r} – ShiftRows`, state, shifted, "Row-wise cyclic shifting", "shiftrows", true);
+    const added=shifted.map((b,i)=>b^key[i]);
+    stateCard(`Round ${r} – AddRoundKey`, shifted, added, "XOR operation with round key", "addroundkey");
+    return added;
+}
+
+function encryptAES(){
+    container.innerHTML="";
+    timeline.clear();
+    const pt=document.getElementById("pt").value;
+    const keyv=document.getElementById("key").value;
+    if(pt.length!==16||keyv.length!==16){ alert("Plaintext and key must be exactly 16 characters"); return; }
+    const p=textToBytes(pt);
+    const k=textToBytes(keyv);
+    addCard(`<h3>Plaintext Source</h3><div class="code">${bytesToHex(p)}</div>`);
+    let state=p.map((b,i)=>b^k[i]);
+    stateCard("Initial Round: AddRoundKey",p,state,"Initial state XOR with master key","addroundkey");
+    for(let r=1;r<=4;r++){ state=aesRound(state,k,r); }
+    const cipher=CryptoJS.AES.encrypt(pt, CryptoJS.enc.Utf8.parse(keyv), {mode:CryptoJS.mode.ECB,padding:CryptoJS.pad.Pkcs7}).ciphertext.toString();
+    addCard(`<h3>Final Ciphertext (HEX)</h3><div class="code">${cipher}</div>`);
+    window.lastCipher=cipher;
+}
+
+function decryptAES(){
+    container.innerHTML="";
+    timeline.clear();
+    const keyv=document.getElementById("key").value;
+    if(keyv.length!==16){alert("Key must be 16 chars");return;}
+    const hex=prompt("Enter ciphertext HEX",window.lastCipher||"");
+    if(!hex) return;
+    const bytes=hex.match(/.{2}/g).map(h=>parseInt(h,16));
+    stateCard("Decryption Input: Ciphertext Bytes",null,bytes,"Encrypted stream data","inverse");
+    const plaintext=CryptoJS.AES.decrypt({ciphertext:CryptoJS.enc.Hex.parse(hex)}, CryptoJS.enc.Utf8.parse(keyv), {mode:CryptoJS.mode.ECB,padding:CryptoJS.pad.Pkcs7}).toString(CryptoJS.enc.Utf8);
+    addCard(`<h3>Recovered Plaintext</h3><div class="code">${plaintext || "Decryption Failed"}</div>`);
+}
+
+window.onload = () => {
+    initThree(); animate();
+    new TextScramble(document.getElementById('scramble-header')).setText('AES-128 Encryption & Decryption');
+};
+</script>
+</body>
+</html>
